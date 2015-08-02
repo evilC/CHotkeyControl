@@ -1,3 +1,9 @@
+/*
+ToDo:
+* Meta-Function to trap set of value and update gui
+
+* Implement Default binding
+*/
 ; ----------------------------- Test script ---------------------------
 #SingleInstance force
 OutputDebug DBGVIEWCLEAR
@@ -15,11 +21,13 @@ class test {
 		
 		callback := this.HotkeyChanged.Bind(this)
 		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "F12")
+		;this.MyHotkey.Value := "F10" ; test setter
 		Gui, Show, x0 y0
 	}
 	
 	HotkeyChanged(hkobj){
-		MsgBox % "Hotkey :" hkobj.Name "`nNew Human Readable: " hkobj.HumanReadable "`nNew Hotkey String: " hkobj.Value
+		;MsgBox % "Hotkey :" hkobj.Name "`nNew Human Readable: " hkobj.HumanReadable "`nNew Hotkey String: " hkobj.Value
+		ToolTip % hkobj.Value
 	}
 }
 
@@ -53,6 +61,16 @@ class _CHotkeyControl {
 		this._MouseLookup[0x207] := { name: "MButton", event: 1 }
 		this._MouseLookup[0x208] := { name: "MButton", event: 0 }
 	}
+	
+	/*
+	__Set(aParam, aValue){
+		if (aParam = "value"){
+			;return this._parent.GuiControl(,this, aValue)
+			;this.Value := aValue
+			;this._BindingChanged()
+		}
+	}
+	*/
 	
 	OptionSelected(){
 		GuiControlGet, option,, % this._hwnd
