@@ -5,6 +5,9 @@ ToDo:
 * Implement Default binding
 
 * Make Esc key quit binding, but not clear current binding
+
+* Callback for pre-binding.
+Will need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 */
 ; ----------------------------- Test script ---------------------------
 #SingleInstance force
