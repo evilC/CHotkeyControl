@@ -14,7 +14,7 @@ class test {
 		this._hwnd := hwnd
 		
 		callback := this.HotkeyChanged.Bind(this)
-		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w100", "F12")
+		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "F12")
 		Gui, Show, x0 y0
 	}
 	
@@ -25,16 +25,20 @@ class test {
 
 ; ----------------------------- Hotkey GuiControl class ---------------------------
 class _CHotkeyControl {
-	static MenuText := "||Wild|PassThrough|Remove"
+	static _MenuText := "||Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
 	__New(hwnd, name, callback, options := "", default := ""){
-		this.Value := ""			; AHK Syntax of current binding, eg ^!a
+		this.Value := ""			; AHK Syntax of current binding, eg ~*^!a
+		this.HotkeyString := ""		; AHK Syntax of current binding, eg ^!a WITHOUT modes such as * or ~
 		this.HumanReadable := ""	; Human Readable version of current binding, eg CTRL + SHIFT + A
+		this.Wild := 0
+		this.PassThrough := 0
 		
 		this._ParentHwnd := hwnd
 		
 		this.Name := name
-		Gui, % this._ParentHwnd ":Add", DDL, % "hwndhDDL AltSubmit " options, % "(UnBound)" this.MenuText
+		Gui, % this._ParentHwnd ":Add", DDL, % "hwndhDDL AltSubmit " options
 		this._hwnd := hDDl
+		this._BindingChanged()
 		fn := this.OptionSelected.Bind(this)
 		GuiControl % "+g", % this._hwnd, % fn
 		
@@ -52,19 +56,29 @@ class _CHotkeyControl {
 	
 	OptionSelected(){
 		GuiControlGet, option,, % this._hwnd
+		GuiControl, Choose, % this._hwnd, 1
 		if (option = 1){
 			; Bind Mode
 			;ToolTip Bind MODE
 			this._BindMode()
 			
 		} else if (option = 2){
-			ToolTip Wild Option Changed
+			;ToolTip Wild Option Changed
+			this.Wild := !this.Wild
+			this._BindingChanged()
+			this._callback.(this)
 		} else if (option = 3){
-			ToolTip PassThrough Option Changed
+			;ToolTip PassThrough Option Changed
+			this.PassThrough := !this.PassThrough
+			this._BindingChanged()
+			this._callback.(this)
 		} else if (option = 4){
-			ToolTip Remove Binding
+			;ToolTip Remove Binding
+			this.HumanReadable := ""
+			this.HotkeyString := ""
+			this._BindingChanged()
+			this._callback.(this)		
 		}
-		GuiControl, Choose, % this._hwnd, 1
 	}
 	
 	_BindMode(){
@@ -129,14 +143,50 @@ class _CHotkeyControl {
 			}
 			hotkey_human .= this._SelectedInput[i].name
 		}
+		
+		StringUpper, hotkey_human, hotkey_human
 		; Set object properties
-		this.Value := hotkey_string
+		this.HotkeyString := hotkey_string
 		this.HumanReadable := hotkey_human
+		
+		; Update the ListBox
+		this._BindingChanged()
 		
 		; Fire the OnChange callback
 		this._callback.(this)
 		;this._callback.(this._name, hotkey_human)
 		;MsgBox % "You hit: " out
+	}
+	
+	_BindingChanged(){
+		modes := ""
+		if (this.HotkeyString){
+			if (this.Wild){
+				modes .= "*"
+			}
+			if (this.PassThrough){
+				modes .= "~"
+			}
+		}
+		hotkey_string := modes this.HotkeyString
+		
+		modes := ""
+		if (this.HumanReadable = ""){
+			Text := "(Unbound)"
+		} else {
+			Text := this.HumanReadable
+			if (this.Wild){
+				modes .= "W"
+			}
+			if (this.PassThrough){
+				modes .= "P"
+			}
+			if (modes){
+				modes := "(" modes ") "
+			}
+		}
+		this.Value := hotkey_string
+		GuiControl, , % this._hwnd, % "|" modes Text this._MenuText
 	}
 	
 	_SetWindowsHookEx(idHook, pfn){
