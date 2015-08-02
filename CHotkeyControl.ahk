@@ -136,7 +136,7 @@ class _CHotkeyControl {
 			if (i > 1 ){
 				hotkey_human .= " + "
 			}
-			if (this._SelectedInput[i].Type = "k" && this._SelectedInput[i].modifier){
+			if (this._SelectedInput[i].Type = "k" && this._SelectedInput[i].modifier && A_Index != l){
 				hotkey_string .= modifier_symbols[this._SelectedInput[i].code]
 			} else {
 				hotkey_string .= this._SelectedInput[i].name
