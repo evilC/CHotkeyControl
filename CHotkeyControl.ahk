@@ -3,6 +3,8 @@ ToDo:
 * Meta-Function to trap set of value and update gui
 
 * Implement Default binding
+
+* Make Esc key quit binding, but not clear current binding
 */
 ; ----------------------------- Test script ---------------------------
 #SingleInstance force
