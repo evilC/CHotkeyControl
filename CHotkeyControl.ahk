@@ -4,10 +4,12 @@ ToDo:
 
 * Implement Default binding
 
-* Make Esc key quit binding, but not clear current binding
+* Callback for pre-binding ?
+May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 
-* Callback for pre-binding.
-Will need to tell hotkey handler to disable all hotkeys while in Bind Mode.
+* Callback after binding selected ?
+Hotkey controls may need to be able to ensure uniqueness.
+
 */
 ; ----------------------------- Test script ---------------------------
 #SingleInstance force
@@ -113,7 +115,6 @@ class _CHotkeyControl {
 		this._BindModeState := 1
 		this._SelectedInput := []
 		this._LastKeyCode := 0
-		;this._KeyCount := 0
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -134,6 +135,9 @@ class _CHotkeyControl {
 		out := ""
 		end_modifier := 0
 		
+		if (this._SelectedInput.length() < 1){
+			return
+		}
 		Loop % this._SelectedInput.length(){
 			i := A_Index
 			if (this._SelectedInput[i].Type = "k" && this._SelectedInput[i].modifier){
