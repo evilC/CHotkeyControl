@@ -293,7 +293,7 @@ class _CHotkeyControl {
 		; ToDo:
 		; Use Repeat count, transition state bits from lParam to filter keys
 		
-		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN
+		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN := 0x104
 		static last_vk, last_sc
 		
 		Critical
