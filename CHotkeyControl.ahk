@@ -295,6 +295,7 @@ class _CHotkeyControl {
 		; Use Repeat count, transition state bits from lParam to filter keys
 		
 		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN
+		static last_vk, last_sc
 		
 		Critical
 		
@@ -307,25 +308,24 @@ class _CHotkeyControl {
 		Extended := NumGet(lParam+0, 8, "UInt") & 1
 		sc := (Extended<<8)|NumGet(lParam+0, 4, "UInt")
 		sc := sc = 0x136 ? 0x36 : sc
-
-		OutputDebug % "Processing Key Hook... VK: " vk " | SC: " sc " | WP: " wParam
+        key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
+        
+		OutputDebug % "Processing Key Hook... " key " | WP: " wParam
 		
 		; Find out if key went up or down, plus filter repeated down events
-		if (wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN) {
-			event := 1
-			if (this._LastKeyCode = vk){
+		if (event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN) {
+			if (last_vk = vk && lst_sc = sc){
 				return 1
 			}
-			this._LastKeyCode := vk
-		} else if (wParam = WM_KEYUP) {
-			event := 0
+			last_vk := vk
+			las_sc := sc
 		}
 
 		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
 
 		;OutputDebug, % "Key VK: " vk ", event: " event ", name: " GetKeyName(Format("vk{:x}", vk)) ", modifier: " modifier
 		
-		this._ProcessInput({Type: "k", name: this._GetKeyName(vk, sc) , code : vk, event: event, modifier: modifier})
+		this._ProcessInput({Type: "k", name: key , code : vk, event: event, modifier: modifier})
 		return 1	; block key
 	}
 	
