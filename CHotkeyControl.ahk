@@ -137,6 +137,7 @@ class _CHotkeyControl {
 
 		this._BindModeState := 1
 		this._SelectedInput := []
+		this._LastKeyCode := 0
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -313,18 +314,18 @@ class _CHotkeyControl {
 		
 		; Find out if key went up or down, plus filter repeated down events
 		if (event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN) {
-			if (last_vk = vk && lst_sc = sc){
+			if (last_vk = vk && last_sc = sc){
 				return 1
 			}
 			last_vk := vk
-			las_sc := sc
+			last_sc := sc
 		}
 
 		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
 
 		;OutputDebug, % "Key VK: " vk ", event: " event ", name: " GetKeyName(Format("vk{:x}", vk)) ", modifier: " modifier
 		
-		this._ProcessInput({Type: "k", name: key , code : vk, event: event, modifier: modifier})
+		this._ProcessInput({Type: "k", name: key , vk : vk, event: event, modifier: modifier})
 		return 1	; block key
 	}
 	
@@ -396,10 +397,12 @@ class _CHotkeyControl {
 
 	; All input (keyboard, mouse, joystick) should flow through here when in Bind Mode
 	_ProcessInput(obj){
+		;{Type: "k", name: keyname, code : keycode, event: event, modifier: modifier}
+		;{Type: "m", name: keyname, event: event}
 		modifier := 0
 		out := "PROCESSINPUT: "
 		if (obj.Type = "k"){
-			out .= "key = " obj.name ", vk: " obj.vk
+			out .= "key = " obj.name ", code: " obj.vk
 			if (obj.vk == 27){
 				;Escape
 				this._BindModeState := 0
