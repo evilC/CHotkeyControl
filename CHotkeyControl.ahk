@@ -310,19 +310,12 @@ class _CHotkeyControl {
 		sc := sc = 0x136 ? 0x36 : sc
 
 		
-		OutputDebug % "VK: " vk " | SC: " sc
+		OutputDebug % "Processing Key Hook... VK: " vk " | SC: " sc " | WP: " wParam
 		
 		; Find the key code and whether key went up/down
 		if (wParam = 0x100) || (wParam = 0x101) {
 			; WM_KEYDOWN || WM_KEYUP message received
-			; Normal keys / Release of ALT
-			if (wParam = 260){
-				; L/R ALT released
-				event := 0
-			} else {
-				; Down event message is 0x100, up is 0x100
-				event := abs(wParam - 0x101)
-			}
+			event := abs(wParam - 0x101)
 		} else if (wParam = 260){
 			; Alt keys pressed
 			event := 1
