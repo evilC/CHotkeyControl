@@ -137,7 +137,6 @@ class _CHotkeyControl {
 
 		this._BindModeState := 1
 		this._SelectedInput := []
-		this._LastKeyCode := 0
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -279,12 +278,6 @@ class _CHotkeyControl {
 	_UnhookWindowsHookEx(idHook){
 		Return DllCall("UnhookWindowsHookEx", "Ptr", idHook)
 	}
-	
-	; Converts a virtual key code / scan code to a key name
-	_GetKeyName(keycode,scancode){
-		return GetKeyName(Format("vk{1:x}sc{2:x}", keycode,scancode))
-	}
-	
 	
 	; Process Keyboard messages from Hooks
 	_ProcessKHook(wParam, lParam){
