@@ -294,6 +294,8 @@ class _CHotkeyControl {
 		; ToDo:
 		; Use Repeat count, transition state bits from lParam to filter keys
 		
+		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN
+		
 		Critical
 		
 		if (this<0){
@@ -312,21 +314,15 @@ class _CHotkeyControl {
 		
 		OutputDebug % "Processing Key Hook... VK: " vk " | SC: " sc " | WP: " wParam
 		
-		; Find the key code and whether key went up/down
-		if (wParam = 0x100) || (wParam = 0x101) {
-			; WM_KEYDOWN || WM_KEYUP message received
-			event := abs(wParam - 0x101)
-		} else if (wParam = 260){
-			; Alt keys pressed
+		; Find out if key went up or down, plus filter repeated down events
+		if (wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN) {
 			event := 1
-		}
-		
-		; We now know the keycode and the event - filter out repeat down events
-		if (event){
-			if (this._LastKeyCode = vk){
+			if (this._LastKeyCode = keycode){
 				return 1
 			}
-			this._LastKeyCode := vk
+			this._LastKeyCode := keycode
+		} else if (wParam = WM_KEYUP) {
+			event := 0
 		}
 
 	
