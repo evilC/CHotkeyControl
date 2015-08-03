@@ -325,13 +325,7 @@ class _CHotkeyControl {
 			event := 0
 		}
 
-	
-		modifier := 0
-		; Determine if key is modifier or normal key
-		if ( (vk >= 160 && keycode <= 165) || (vk >= 91 && keycode <= 93) ) {
-			modifier := 1
-		}
-
+		modifier := (keycode >= 160 && keycode <= 165) || (keycode >= 91 && keycode <= 93)
 
 		;OutputDebug, % "Key Code: " keycode ", event: " event ", name: " GetKeyName(Format("vk{:x}", keycode)) ", modifier: " modifier
 		
