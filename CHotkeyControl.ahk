@@ -1,9 +1,7 @@
 /*
 ToDo:
-* Meta-Function to trap set of value and update gui
-
-* Why are some keys recognized wrong?
-eg Up arrow recognized as NumpadUp
+* Remove Focus
+Down Arrow will move selection
 
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
@@ -282,10 +280,11 @@ class _CHotkeyControl {
 		Return DllCall("UnhookWindowsHookEx", "Ptr", idHook)
 	}
 	
-	; Converts a virtual key code to a key name
-	_GetKeyName(keycode){
-		return GetKeyName(Format("vk{:x}", keycode))
+	; Converts a virtual key code / scan code to a key name
+	_GetKeyName(keycode,scancode){
+		return GetKeyName(Format("vk{1:x}sc{2:x}", keycode,scancode))
 	}
+	
 	
 	; Process Keyboard messages from Hooks
 	_ProcessKHook(wParam, lParam){
@@ -303,6 +302,15 @@ class _CHotkeyControl {
 		this:=Object(A_EventInfo)
 		
 		keycode := NumGet(lParam+0,0,"Uint")
+		scanCode:= NumGet(lparam+0,4,"UInt")
+		
+		vk := NumGet(lParam+0, "UInt")
+		Extended := NumGet(lParam+0, 8, "UInt") & 1
+		sc := (Extended<<8)|NumGet(lParam+0, 4, "UInt")
+		sc := sc = 0x136 ? 0x36 : sc
+
+		
+		OutputDebug % "VK: " vk " | SC: " sc
 		
 		; Find the key code and whether key went up/down
 		if (wParam = 0x100) || (wParam = 0x101) {
@@ -322,23 +330,23 @@ class _CHotkeyControl {
 		
 		; We now know the keycode and the event - filter out repeat down events
 		if (event){
-			if (this._LastKeyCode = keycode){
+			if (this._LastKeyCode = vk){
 				return 1
 			}
-			this._LastKeyCode := keycode
+			this._LastKeyCode := vk
 		}
 
 	
 		modifier := 0
 		; Determine if key is modifier or normal key
-		if ( (keycode >= 160 && keycode <= 165) || (keycode >= 91 && keycode <= 93) ) {
+		if ( (vk >= 160 && keycode <= 165) || (vk >= 91 && keycode <= 93) ) {
 			modifier := 1
 		}
 
 
 		;OutputDebug, % "Key Code: " keycode ", event: " event ", name: " GetKeyName(Format("vk{:x}", keycode)) ", modifier: " modifier
 		
-		this._ProcessInput({Type: "k", name: this._GetKeyName(keycode) , code : keycode, event: event, modifier: modifier})
+		this._ProcessInput({Type: "k", name: this._GetKeyName(vk, sc) , code : vk, event: event, modifier: modifier})
 		return 1	; block key
 	}
 	
