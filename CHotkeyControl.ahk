@@ -46,6 +46,7 @@ class _CHotkeyControl {
 	__New(hwnd, name, callback, options := "", default := ""){
 		this._Value := default			; AHK Syntax of current binding, eg ~*^!a
 		this.HotkeyString := ""		; AHK Syntax of current binding, eg ^!a WITHOUT modes such as * or ~
+		this.ModeString := ""
 		this.HumanReadable := ""	; Human Readable version of current binding, eg CTRL + SHIFT + A
 		this.Wild := 0
 		this.PassThrough := 0
@@ -84,7 +85,6 @@ class _CHotkeyControl {
 	__Get(aParam){
 		if (aParam = "value"){
 			return this._Value
-			
 		}
 	}
 
@@ -99,7 +99,7 @@ class _CHotkeyControl {
 	; Change hotkey only and LEAVE modes
 	_HotkeySet(){
 		this.HumanReadable := this._BuildHumanReadable(this.HotkeyString)
-		this._value := aValue
+		this._value := this.ModeString this.HotkeyString
 		this._UpdateGuiControl()
 	}
 	
@@ -254,6 +254,7 @@ class _CHotkeyControl {
 	_SetModes(hotkey_string){
 		this.Wild := 0
 		this.PassThrough := 0
+		this.ModeString := ""
 		Loop % StrLen(hotkey_string) {
 			chr := SubStr(hotkey_string, A_Index, 1)
 			if (chr = "*"){
@@ -263,6 +264,7 @@ class _CHotkeyControl {
 			} else {
 				break
 			}
+			this.ModeString .= chr
 		}
 	}
 	
