@@ -2,7 +2,8 @@
 ToDo:
 * Meta-Function to trap set of value and update gui
 
-* Implement Default binding
+* Why are some keys recognized wrong?
+eg Up arrow recognized as NumpadUp
 
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
@@ -27,8 +28,8 @@ class test {
 		this._hwnd := hwnd
 		
 		callback := this.HotkeyChanged.Bind(this)
-		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "F12")
-		;this.MyHotkey.Value := "F10" ; test setter
+		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "~F12")
+		this.MyHotkey.Value := "*^F10" ; test setter
 		Gui, Show, x0 y0
 	}
 	
@@ -41,8 +42,9 @@ class test {
 ; ----------------------------- Hotkey GuiControl class ---------------------------
 class _CHotkeyControl {
 	static _MenuText := "||Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
+	
 	__New(hwnd, name, callback, options := "", default := ""){
-		this.Value := ""			; AHK Syntax of current binding, eg ~*^!a
+		this._Value := default			; AHK Syntax of current binding, eg ~*^!a
 		this.HotkeyString := ""		; AHK Syntax of current binding, eg ^!a WITHOUT modes such as * or ~
 		this.HumanReadable := ""	; Human Readable version of current binding, eg CTRL + SHIFT + A
 		this.Wild := 0
@@ -53,7 +55,6 @@ class _CHotkeyControl {
 		this.Name := name
 		Gui, % this._ParentHwnd ":Add", DDL, % "hwndhDDL AltSubmit " options
 		this._hwnd := hDDl
-		this._BindingChanged()
 		fn := this.OptionSelected.Bind(this)
 		GuiControl % "+g", % this._hwnd, % fn
 		
@@ -67,18 +68,43 @@ class _CHotkeyControl {
 		this._MouseLookup[0x205] := { name: "RButton", event: 0 }
 		this._MouseLookup[0x207] := { name: "MButton", event: 1 }
 		this._MouseLookup[0x208] := { name: "MButton", event: 0 }
+		
+		this.Value := this._Value	; trigger __Set meta-func to configure control
 	}
 	
-	/*
+	; value was set
 	__Set(aParam, aValue){
 		if (aParam = "value"){
-			;return this._parent.GuiControl(,this, aValue)
-			;this.Value := aValue
-			;this._BindingChanged()
+			this._ValueSet(aValue)
+			return this._Value
 		}
 	}
-	*/
 	
+	; Read of value
+	__Get(aParam){
+		if (aParam = "value"){
+			return this._Value
+			
+		}
+	}
+
+	; Change hotkey AND modes to new values
+	_ValueSet(hotkey_string){
+		arr := this._SplitModes(hotkey_string)
+		this._SetModes(arr[1])
+		this.HotkeyString := arr[2]
+		this._HotkeySet()
+	}
+	
+	; Change hotkey only and LEAVE modes
+	_HotkeySet(){
+		this.HumanReadable := this._BuildHumanReadable(this.HotkeyString)
+		this._value := aValue
+		this._UpdateGuiControl()
+	}
+	
+	; ============== HOTKEY MANAGEMENT ============
+	; An option was selected in the drop-down list
 	OptionSelected(){
 		GuiControlGet, option,, % this._hwnd
 		GuiControl, Choose, % this._hwnd, 1
@@ -90,26 +116,25 @@ class _CHotkeyControl {
 		} else if (option = 2){
 			;ToolTip Wild Option Changed
 			this.Wild := !this.Wild
-			this._BindingChanged()
+			this._HotkeySet()
 			this._callback.(this)
 		} else if (option = 3){
 			;ToolTip PassThrough Option Changed
 			this.PassThrough := !this.PassThrough
-			this._BindingChanged()
+			this._HotkeySet()
 			this._callback.(this)
 		} else if (option = 4){
 			;ToolTip Remove Binding
-			this.HumanReadable := ""
-			this.HotkeyString := ""
-			this._BindingChanged()
+			this.Value := ""
 			this._callback.(this)		
 		}
 	}
 	
+	; Bind mode was enabled
 	_BindMode(){
 		static WH_KEYBOARD_LL := 13, WH_MOUSE_LL := 14
 		static modifier_symbols := {91: "#", 92: "#", 160: "+", 161: "+", 162: "^", 163: "^", 164: "!", 165: "!"}
-		static modifier_lr_variants := {91: "<", 92: ">", 160: "<", 161: ">", 162: "<", 163: ">", 164: "<", 165: ">"}
+		;static modifier_lr_variants := {91: "<", 92: ">", 160: "<", 161: ">", 162: "<", 163: ">", 164: "<", 165: ">"}
 
 
 		this._BindModeState := 1
@@ -138,84 +163,115 @@ class _CHotkeyControl {
 		if (this._SelectedInput.length() < 1){
 			return
 		}
-		Loop % this._SelectedInput.length(){
-			i := A_Index
-			if (this._SelectedInput[i].Type = "k" && this._SelectedInput[i].modifier){
-				; modifier key
-				end_modifier := i
-			} else {
-				; end key
-				if (end_modifier){
-					; Strip L/R prefix from modifiers previous to this key
-					Loop % end_modifier {
-						this._SelectedInput[A_Index].name := SubStr(this._SelectedInput[A_Index].name, 2)
-					}
-				}
-			}
+
+		; Prefix with current modes
+		hotkey_string := ""
+		if (this.Wild){
+			hotkey_string .= "*"
+		}
+		if (this.PassThrough){
+			hotkey_string .= "~"
 		}
 
-		hotkey_string := ""
-		hotkey_human := ""
-
+		; build hotkey string
 		l := this._SelectedInput.length()
 		Loop % l {
-			i := A_Index
-			if (i > 1 ){
-				hotkey_human .= " + "
-			}
-			if (this._SelectedInput[i].Type = "k" && this._SelectedInput[i].modifier && A_Index != l){
-				hotkey_string .= modifier_symbols[this._SelectedInput[i].code]
+			if (this._SelectedInput[A_Index].Type = "k" && this._SelectedInput[A_Index].modifier && A_Index != l){
+				hotkey_string .= modifier_symbols[this._SelectedInput[A_Index].code]
 			} else {
-				hotkey_string .= this._SelectedInput[i].name
+				hotkey_string .= this._SelectedInput[A_Index].name
 			}
-			hotkey_human .= this._SelectedInput[i].name
 		}
 		
-		StringUpper, hotkey_human, hotkey_human
-		; Set object properties
-		this.HotkeyString := hotkey_string
-		this.HumanReadable := hotkey_human
-		
-		; Update the ListBox
-		this._BindingChanged()
+		; trigger __Set meta-func to configure control
+		this.Value := hotkey_string
 		
 		; Fire the OnChange callback
 		this._callback.(this)
-		;this._callback.(this._name, hotkey_human)
-		;MsgBox % "You hit: " out
 	}
 	
-	_BindingChanged(){
-		modes := ""
-		if (this.HotkeyString){
-			if (this.Wild){
-				modes .= "*"
-			}
-			if (this.PassThrough){
-				modes .= "~"
-			}
-		}
-		hotkey_string := modes this.HotkeyString
+	; Converts an AHK hotkey string (eg "^+a"), plus the state of WILD and PASSTHROUGH properties to Human Readable format (eg "(WP) CTRL+SHIFT+A")
+	_BuildHumanReadable(hotkey_string){
+		static modifier_names := {"+": "Shift", "^": "Ctrl", "!": "Alt", "#": "Win"}
 		
-		modes := ""
-		if (this.HumanReadable = ""){
-			Text := "(Unbound)"
-		} else {
-			Text := this.HumanReadable
-			if (this.Wild){
-				modes .= "W"
-			}
-			if (this.PassThrough){
-				modes .= "P"
-			}
-			if (modes){
-				modes := "(" modes ") "
+		dbg := "TRANSLATING: " hotkey_string " : "
+		
+		if (hotkey_string = ""){
+			return "(Select to Bind)"
+		}
+		str := ""
+		mode_str := ""
+		idx := 1
+		; Add mode indicators
+		if (this.Wild){
+			mode_str .= "W"
+		}
+		if (this.PassThrough){
+			mode_str .= "P"
+		}
+		
+		if (mode_str){
+			str := "(" mode_str ") " str
+		}
+		
+		idx := 1
+		; Parse modifiers
+		Loop % StrLen(hotkey_string) {
+			chr := SubStr(hotkey_string, A_Index, 1)
+			if (ObjHasKey(modifier_names, chr)){
+				str .= modifier_names[chr] " + "
+				idx++
+			} else {
+				break
 			}
 		}
-		this.Value := hotkey_string
-		GuiControl, , % this._hwnd, % "|" modes Text this._MenuText
+		str .= SubStr(hotkey_string, idx)
+		StringUpper, str, str
+		
+		;OutputDebug % "BHR: " dbg hotkey_string
+		return str
+	}
+
+	; Splits a hotkey string (eg *~^a" into an array with 1st item modes (eg "*~") and 2nd item the rest of the hotkey (eg "^a")
+	_SplitModes(hotkey_string){
+		mode_str := ""
+		idx := 0
+		Loop % StrLen(hotkey_string) {
+			chr := SubStr(hotkey_string, A_Index, 1)
+			if (chr = "*" || chr = "~"){
+				idx++
+			} else {
+				break
+			}
+		}
+		if (idx){
+			mode_str := SubStr(hotkey_string, 1, idx)
+		}
+		return [mode_str, SubStr(hotkey_string, idx + 1)]
 	}
 	
+	; Sets modes from a mode string (eg "*~")
+	_SetModes(hotkey_string){
+		this.Wild := 0
+		this.PassThrough := 0
+		Loop % StrLen(hotkey_string) {
+			chr := SubStr(hotkey_string, A_Index, 1)
+			if (chr = "*"){
+				this.Wild := 1
+			} else if (chr = "~"){
+				this.PassThrough := 1
+			} else {
+				break
+			}
+		}
+	}
+	
+	; The binding changed - update the GuiControl
+	_UpdateGuiControl(){
+		GuiControl, , % this._hwnd, % "|" modes this.HumanReadable this._MenuText
+	}
+	
+	; ============= HOOK HANDLING =================
 	_SetWindowsHookEx(idHook, pfn){
 		Return DllCall("SetWindowsHookEx", "Ptr", idHook, "Ptr", pfn, "Uint", DllCall("GetModuleHandle", "Uint", 0, "Ptr"), "Uint", 0, "Ptr")
 	}
@@ -224,6 +280,7 @@ class _CHotkeyControl {
 		Return DllCall("UnhookWindowsHookEx", "Ptr", idHook)
 	}
 	
+	; Converts a virtual key code to a key name
 	_GetKeyName(keycode){
 		return GetKeyName(Format("vk{:x}", keycode))
 	}
@@ -370,7 +427,7 @@ class _CHotkeyControl {
 		}
 		
 		; Detect if Bind Mode should end
-		OutputDebug % out
+		;OutputDebug % out
 		if (obj.event = 0){
 			; key / button up
 			this._BindModeState := 0
