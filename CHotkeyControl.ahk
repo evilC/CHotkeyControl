@@ -137,7 +137,6 @@ class _CHotkeyControl {
 
 		this._BindModeState := 1
 		this._SelectedInput := []
-		this._LastKeyCode := 0
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -175,7 +174,7 @@ class _CHotkeyControl {
 		l := this._SelectedInput.length()
 		Loop % l {
 			if (this._SelectedInput[A_Index].Type = "k" && this._SelectedInput[A_Index].modifier && A_Index != l){
-				hotkey_string .= modifier_symbols[this._SelectedInput[A_Index].code]
+				hotkey_string .= modifier_symbols[this._SelectedInput[A_Index].vk]
 			} else {
 				hotkey_string .= this._SelectedInput[A_Index].name
 			}
@@ -397,13 +396,11 @@ class _CHotkeyControl {
 
 	; All input (keyboard, mouse, joystick) should flow through here when in Bind Mode
 	_ProcessInput(obj){
-		;{Type: "k", name: keyname, code : keycode, event: event, modifier: modifier}
-		;{Type: "m", name: keyname, event: event}
 		modifier := 0
 		out := "PROCESSINPUT: "
 		if (obj.Type = "k"){
-			out .= "key = " obj.name ", code: " obj.code
-			if (obj.code == 27){
+			out .= "key = " obj.name ", vk: " obj.vk
+			if (obj.vk == 27){
 				;Escape
 				this._BindModeState := 0
 				return
