@@ -1,7 +1,5 @@
 /*
 ToDo:
-* Remove Focus
-Down Arrow will move selection
 
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
