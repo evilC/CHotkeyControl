@@ -1,6 +1,12 @@
 /*
 ToDo:
 
+* Shift + Numpad (with numlock on) does not work
+An up event is received for shift before down event.
+eg turn numlock on, hold Shift, Hit Numpad8
+Callback occurs for up event of shift before the callback occurs for the down event of NumPadUp
++Numpad8 as an AHK hotkey never triggers, so this is not a valid combo.
+
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 
@@ -306,10 +312,12 @@ class _CHotkeyControl {
 		sc := sc = 0x136 ? 0x36 : sc
         key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
         
-		OutputDebug % "Processing Key Hook... " key " | WP: " wParam
+		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
+		
+		OutputDebug % "Processing Key Hook... " key " | event: " event " | WP: " wParam
 		
 		; Find out if key went up or down, plus filter repeated down events
-		if (event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN) {
+		if (event) {
 			if (last_vk = vk && last_sc = sc){
 				return 1
 			}
