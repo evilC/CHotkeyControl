@@ -42,9 +42,6 @@ class _CHotkeyControl {
 	static _MenuText := "Select new Binding|Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
 	
 	__New(hwnd, name, callback, options := "", default := ""){
-		static PtrType := A_PtrSize ? "Ptr" : "Uint"
-		static PtrSize := A_PtrSize ? A_PtrSize : 4
-		
 		this._Value := default			; AHK Syntax of current binding, eg ~*^!a
 		this.HotkeyString := ""		; AHK Syntax of current binding, eg ^!a WITHOUT modes such as * or ~
 		this.ModeString := ""
@@ -69,11 +66,7 @@ class _CHotkeyControl {
 		this._hwnd := hwnd
 		
 		; Find hwnd of EditBox that is a child of the ComboBox
-		CBBISize := 40 + (3 * PtrSize)
-		VarSetCapacity(CBBI, CBBISize, 0)
-		NumPut(CBBISize, CBBI, 0, "UInt")
-		DllCall("User32.dll\GetComboBoxInfo", PtrType, this._hwnd, PtrType, &CBBI)
-		this._hEdit := NumGet(CBBI, 40 + PtrSize, PtrType)
+		this._hEdit := DllCall("GetWindow","PTR",this._hwnd,"Uint",5) ;GW_CHILD = 5
 		
 		; Bind an OnChange event
 		fn := this.OptionSelected.Bind(this)
