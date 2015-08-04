@@ -39,24 +39,20 @@ class test {
 
 ; ----------------------------- Hotkey GuiControl class ---------------------------
 class _CHotkeyControl {
-	static _MenuText := "||Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
+	static _MenuText := "Select new Binding|Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
 	
 	__New(hwnd, name, callback, options := "", default := ""){
+		static PtrType := A_PtrSize ? "Ptr" : "Uint"
+		static PtrSize := A_PtrSize ? A_PtrSize : 4
+		
 		this._Value := default			; AHK Syntax of current binding, eg ~*^!a
 		this.HotkeyString := ""		; AHK Syntax of current binding, eg ^!a WITHOUT modes such as * or ~
 		this.ModeString := ""
 		this.HumanReadable := ""	; Human Readable version of current binding, eg CTRL + SHIFT + A
 		this.Wild := 0
 		this.PassThrough := 0
-		
 		this._ParentHwnd := hwnd
-		
 		this.Name := name
-		Gui, % this._ParentHwnd ":Add", DDL, % "hwndhDDL AltSubmit " options
-		this._hwnd := hDDl
-		fn := this.OptionSelected.Bind(this)
-		GuiControl % "+g", % this._hwnd, % fn
-		
 		this._callback := callback
 		
 		; Lookup table to accelerate finding which mouse button was pressed
@@ -67,7 +63,22 @@ class _CHotkeyControl {
 		this._MouseLookup[0x205] := { name: "RButton", event: 0 }
 		this._MouseLookup[0x207] := { name: "MButton", event: 1 }
 		this._MouseLookup[0x208] := { name: "MButton", event: 0 }
+
+		; Add the GuiControl
+		Gui, % this._ParentHwnd ":Add", ComboBox, % "hwndhwnd AltSubmit " options, % this._MenuText
+		this._hwnd := hwnd
 		
+		; Find hwnd of EditBox that is a child of the ComboBox
+		CBBISize := 40 + (3 * PtrSize)
+		VarSetCapacity(CBBI, CBBISize, 0)
+		NumPut(CBBISize, CBBI, 0, "UInt")
+		DllCall("User32.dll\GetComboBoxInfo", PtrType, this._hwnd, PtrType, &CBBI)
+		this._hEdit := NumGet(CBBI, 40 + PtrSize, PtrType)
+		
+		; Bind an OnChange event
+		fn := this.OptionSelected.Bind(this)
+		GuiControl % "+g", % this._hwnd, % fn
+				
 		this.Value := this._Value	; trigger __Set meta-func to configure control
 	}
 	
@@ -105,7 +116,7 @@ class _CHotkeyControl {
 	; An option was selected in the drop-down list
 	OptionSelected(){
 		GuiControlGet, option,, % this._hwnd
-		GuiControl, Choose, % this._hwnd, 1
+		GuiControl, Choose, % this._hwnd, 0
 		if (option = 1){
 			; Bind Mode
 			;ToolTip Bind MODE
@@ -267,7 +278,8 @@ class _CHotkeyControl {
 	
 	; The binding changed - update the GuiControl
 	_UpdateGuiControl(){
-		GuiControl, , % this._hwnd, % "|" modes this.HumanReadable this._MenuText
+		static EM_SETCUEBANNER:=0x1501
+		DllCall("User32.dll\SendMessageW", "Ptr", this._hEdit, "Uint", EM_SETCUEBANNER, "Ptr", True, "WStr", modes this.HumanReadable)
 	}
 	
 	; ============= HOOK HANDLING =================
