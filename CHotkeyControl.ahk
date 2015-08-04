@@ -29,15 +29,31 @@ class test {
 		Gui, new, hwndhwnd
 		this._hwnd := hwnd
 		
+		this.Hotkeys := {}
+		
 		callback := this.HotkeyChanged.Bind(this)
-		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "~F12")
-		this.MyHotkey.Value := "*^F10" ; test setter
+		this.MyHotkey := new _CHotkeyControl(hwnd, "MyHotkey", callback, "x5 y5 w200", "F12")
+		this.MyHotkey.Value := "~+a" ; test setter
 		Gui, Show, x0 y0
 	}
 	
 	HotkeyChanged(hkobj){
 		;MsgBox % "Hotkey :" hkobj.Name "`nNew Human Readable: " hkobj.HumanReadable "`nNew Hotkey String: " hkobj.Value
 		ToolTip % hkobj.Value
+		if (IsObject(this.Hotkeys[hkobj.name])){
+			; hotkey already bound, un-bind first
+			hotkey, % this.Hotkeys[hkobj.name].binding, Off
+		}
+		; Bind new hotkey
+		this.Hotkeys[hkobj.name] := {binding: hkobj.Value}
+		fn := this.HotkeyPressed.Bind(this)
+		hotkey, % hkobj.Value, % fn
+		hotkey, % hkobj.Value, On
+		OutputDebug % "BINDING: " hkobj._Value
+	}
+	
+	HotkeyPressed(){
+		SoundBeep
 	}
 }
 
@@ -107,6 +123,9 @@ class _CHotkeyControl {
 		this.HumanReadable := this._BuildHumanReadable(this.HotkeyString)
 		this._value := this.ModeString this.HotkeyString
 		this._UpdateGuiControl()
+		; Fire the OnChange callback
+		this._callback.(this)
+
 	}
 	
 	; ============== HOTKEY MANAGEMENT ============
@@ -122,17 +141,16 @@ class _CHotkeyControl {
 		} else if (option = 2){
 			;ToolTip Wild Option Changed
 			this.Wild := !this.Wild
+			this.ModeString := this._BuildModes()
 			this._HotkeySet()
-			this._callback.(this)
 		} else if (option = 3){
 			;ToolTip PassThrough Option Changed
 			this.PassThrough := !this.PassThrough
+			this.ModeString := this._BuildModes()
 			this._HotkeySet()
-			this._callback.(this)
 		} else if (option = 4){
 			;ToolTip Remove Binding
 			this.Value := ""
-			this._callback.(this)		
 		}
 	}
 	
@@ -190,11 +208,19 @@ class _CHotkeyControl {
 		
 		; trigger __Set meta-func to configure control
 		this.Value := hotkey_string
-		
-		; Fire the OnChange callback
-		this._callback.(this)
 	}
 	
+	; Builds mode string from this.Wild and this.Passthrough
+	_BuildModes(){
+		str := ""
+		if (this.Wild){
+			str .= "*"
+		}
+		if (this.PassThrough){
+			str .= "~"
+		}
+		return str
+	}
 	; Converts an AHK hotkey string (eg "^+a"), plus the state of WILD and PASSTHROUGH properties to Human Readable format (eg "(WP) CTRL+SHIFT+A")
 	_BuildHumanReadable(hotkey_string){
 		static modifier_names := {"+": "Shift", "^": "Ctrl", "!": "Alt", "#": "Win"}
