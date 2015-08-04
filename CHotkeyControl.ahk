@@ -1,8 +1,6 @@
 /*
 ToDo:
 
-* Pressing LCTRL + RCTRL + a results in ^^a
-
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 
@@ -138,9 +136,9 @@ class _CHotkeyControl {
 		static modifier_symbols := {91: "#", 92: "#", 160: "+", 161: "+", 162: "^", 163: "^", 164: "!", 165: "!"}
 		;static modifier_lr_variants := {91: "<", 92: ">", 160: "<", 161: ">", 162: "<", 163: ">", 164: "<", 165: ">"}
 
-
 		this._BindModeState := 1
 		this._SelectedInput := []
+		this._ModifiersUsed := []
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -399,6 +397,8 @@ class _CHotkeyControl {
 		;{Type: "m", name: keyname, event: event}
 		; Do not process key if bind mode has been exited.
 		; Prevents users from being able to hit multiple keys together and exceeding valid length
+		static modifier_variants := {91: 92, 92: 91, 160: 161, 161: 160, 162: 163, 163: 162, 164: 165, 165: 164}
+		
 		if (!this._BindModeState){
 			return
 		}
@@ -412,6 +412,17 @@ class _CHotkeyControl {
 				return
 			}
 			modifier := obj.modifier
+			; RALT sends CTRL, ALT continuously when held - ignore down events for already held modifiers
+			Loop % this._ModifiersUsed.length(){
+				if (obj.event = 1 && obj.vk = this._ModifiersUsed[A_Index]){
+					;OutputDebug % "IGNORING : " obj.vk
+					return
+				}
+				;OutputDebug % "ALLOWING : " obj.vk " - " this._ModifiersUsed.length()
+			}
+			this._ModifiersUsed.push(obj.vk)
+			; Push l/r variant to used list
+			this._ModifiersUsed.push(modifier_variants[obj.vk])
 		} else if (obj.Type = "m"){
 			out .= "mouse = " obj.name
 		} else if (obj.Type = "j"){
