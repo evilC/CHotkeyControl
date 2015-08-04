@@ -1,6 +1,8 @@
 /*
 ToDo:
 
+* Pressing LCTRL + RCTRL + a results in ^^a
+
 * Callback for pre-binding ?
 May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 
@@ -395,6 +397,11 @@ class _CHotkeyControl {
 	_ProcessInput(obj){
 		;{Type: "k", name: keyname, code : keycode, event: event, modifier: modifier}
 		;{Type: "m", name: keyname, event: event}
+		; Do not process key if bind mode has been exited.
+		; Prevents users from being able to hit multiple keys together and exceeding valid length
+		if (!this._BindModeState){
+			return
+		}
 		modifier := 0
 		out := "PROCESSINPUT: "
 		if (obj.Type = "k"){
