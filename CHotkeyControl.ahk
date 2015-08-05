@@ -40,20 +40,29 @@ class test {
 	HotkeyChanged(hkobj){
 		;MsgBox % "Hotkey :" hkobj.Name "`nNew Human Readable: " hkobj.HumanReadable "`nNew Hotkey String: " hkobj.Value
 		ToolTip % hkobj.Value
-		if (IsObject(this.Hotkeys[hkobj.name])){
+		if (IsObject(this.Hotkeys[hkobj.name]) && this.Hotkeys[hkobj.name].binding){
 			; hotkey already bound, un-bind first
 			hotkey, % this.Hotkeys[hkobj.name].binding, Off
+			hotkey, % this.Hotkeys[hkobj.name].binding " up", Off
 		}
 		; Bind new hotkey
 		this.Hotkeys[hkobj.name] := {binding: hkobj.Value}
-		fn := this.HotkeyPressed.Bind(this)
+		fn := this.HotkeyPressed.Bind(this, hkobj, 1)
 		hotkey, % hkobj.Value, % fn
 		hotkey, % hkobj.Value, On
+		
+		fn := this.HotkeyPressed.Bind(this, hkobj, 0)
+		hotkey, % hkobj.Value " up", % fn
+		hotkey, % hkobj.Value " up", On
 		OutputDebug % "BINDING: " hkobj._Value
 	}
 	
-	HotkeyPressed(){
-		SoundBeep
+	HotkeyPressed(hkobj, state){
+		if (state){
+			SoundBeep, 1000, 200
+		} else {
+			SoundBeep, 500, 200
+		}
 	}
 }
 
@@ -163,6 +172,8 @@ class _CHotkeyControl {
 		this._BindModeState := 1
 		this._SelectedInput := []
 		this._ModifiersUsed := []
+		this._NonModifierCount := 0
+		this._LastInput := {}
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -323,7 +334,6 @@ class _CHotkeyControl {
 		; Use Repeat count, transition state bits from lParam to filter keys
 		
 		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN := 0x104
-		static last_vk, last_sc
 		
 		Critical
 		
@@ -341,21 +351,24 @@ class _CHotkeyControl {
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
 		OutputDebug % "Processing Key Hook... " key " | event: " event " | WP: " wParam
-		
-		; Find out if key went up or down, plus filter repeated down events
+	
+		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
+		obj := {Type: "k", name: key , vk : vk, event: event, modifier: modifier}
+			
+		; Filter repeated down events
 		if (event) {
-			if (last_vk = vk && last_sc = sc){
+			if (this._InputCompare(obj, this._LastInput)){
 				return 1
 			}
-			last_vk := vk
-			last_sc := sc
+			
+			this._LastInput := obj
 		}
 
-		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
+
 
 		;OutputDebug, % "Key VK: " vk ", event: " event ", name: " GetKeyName(Format("vk{:x}", vk)) ", modifier: " modifier
 		
-		this._ProcessInput({Type: "k", name: key , vk : vk, event: event, modifier: modifier})
+		this._ProcessInput(obj)
 		return 1	; block key
 	}
 	
@@ -372,6 +385,8 @@ class _CHotkeyControl {
 		*/
 		; MSLLHOOKSTRUCT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644970(v=vs.85).aspx
 		static WM_LBUTTONDOWN := 0x0201, WM_LBUTTONUP := 0x0202 , WM_RBUTTONDOWN := 0x0204, WM_RBUTTONUP := 0x0205, WM_MBUTTONDOWN := 0x0207, WM_MBUTTONUP := 0x0208, WM_MOUSEHWHEEL := 0x20E, WM_MOUSEWHEEL := 0x020A, WM_XBUTTONDOWN := 0x020B, WM_XBUTTONUP := 0x020C
+		static button_map := {0x0201: 1, 0x0202: 1 , 0x0204: 2, 0x0205: 2, 0x0207: 3, x0208: 3}
+		static button_event := {0x0201: 1, 0x0202: 0 , 0x0204: 1, 0x0205: 0, 0x0207: 1, x0208: 0}
 		Critical
 		if (this<0 || wParam = 0x200){
 			Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookMouse, "int", this, "Uint", wParam, "Uint", lParam)
@@ -381,11 +396,14 @@ class _CHotkeyControl {
 		
 		keyname := ""
 		event := 0
+		button := 0
 		
 		if (IsObject(this._MouseLookup[wParam])){
 			; L / R / M  buttons
 			keyname := this._MouseLookup[wParam].name
-			event := 1
+			;event := 1
+			button := button_map[wParam]
+			event := button_event[wParam]
 		} else {
 			; Wheel / XButtons
 			; Find HiWord of mouseData from Struct
@@ -397,16 +415,20 @@ class _CHotkeyControl {
 				if (wParam = WM_MOUSEWHEEL){
 					keyname .= "Wheel"
 					if (mouseData > 1){
-						keyname .= "U"
+						keyname .= "Up"
+						button := 6
 					} else {
-						keyname .= "D"
+						keyname .= "Down"
+						button := 7
 					}
 				} else {
 					keyname .= "Wheel"
-					if (mouseData > 1){
-						keyname .= "R"
+					if (mouseData < 1){
+						keyname .= "Left"
+						button := 8
 					} else {
-						keyname .= "L"
+						keyname .= "Right"
+						button := 9
 					}
 				}
 			} else if (wParam = WM_XBUTTONDOWN || wParam = WM_XBUTTONUP){
@@ -417,11 +439,16 @@ class _CHotkeyControl {
 					event := 0
 				}
 				keyname := "XButton" mouseData
+				button := 3 + mouseData
 			}
 		}
 		
 		;OutputDebug % "Mouse: " keyname ", event: " event
-		this._ProcessInput({Type: "m", name: keyname, event: event})
+		this._ProcessInput({Type: "m", button: button, name: keyname, event: event})
+		if (wParam = WM_MOUSEHWHEEL || wParam = WM_MOUSEWHEEL){
+			; Mouse wheel does not generate up event, simulate it.
+			this._ProcessInput({Type: "m", button: button, name: keyname, event: 0})
+		}
 		return 1
 	}
 
@@ -464,17 +491,45 @@ class _CHotkeyControl {
 		}
 		
 		; Detect if Bind Mode should end
-		;OutputDebug % out
+		OutputDebug % out
 		if (obj.event = 0){
 			; key / button up
-			this._BindModeState := 0
-		} else {
-			; key / button down
-			this._SelectedInput.push(obj)
-			; End if not modifier
 			if (!modifier){
+				this._NonModifierCount--
+			}
+			if (this._InputCompare(obj, this._SelectedInput[this._SelectedInput.length()])){
 				this._BindModeState := 0
 			}
+		} else {
+			; key / button down
+			if (!modifier){
+				if (this._NonModifierCount){
+					SoundBeep, 500, 200
+					return
+				}
+				this._NonModifierCount++
+			}
+			this._SelectedInput.push(obj)
+			; End if not modifier
+			;if (!modifier){
+			;	this._BindModeState := 0
+			;}
 		}
+	}
+	
+	; Compares two Input objects (that came from hooks)
+	_InputCompare(obj1, obj2){
+		if (obj1.Type = obj2.Type){
+			if (obj1.Type = "k"){
+				if (obj1.vk = obj2.vk && obj1.sc = obj2.sc){
+					return 1
+				}
+			} else if (obj1.Type = "m"){
+				return obj1.button = obj2.button
+			} else if (obj1.Type = "j"){
+				
+			}
+		}
+		return 0
 	}
 }
