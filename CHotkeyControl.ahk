@@ -72,6 +72,12 @@ class _CHotkeyControl {
 	_ValueSet(hotkey_string){
 		arr := this._SplitModes(hotkey_string)
 		this._SetModes(arr[1])
+		joy := StrSplit(arr[2], "Joy")
+		if (joy[1] && joy[2]){
+			this._IsJoystick := 1
+		} else {
+			this._IsJoystick := 0
+		}
 		this.HotkeyString := arr[2]
 		this._HotkeySet()
 	}
@@ -129,11 +135,9 @@ class _CHotkeyControl {
 		Gui,  % hPrompt ":Show"
 		
 		; Activate hooks
-		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this)) ; fn)
-		this._hHookMouse := this._SetWindowsHookEx(WH_MOUSE_LL, RegisterCallback(this._ProcessMHook,"Fast",,&this)) ; fn)
+		; ToDo: why does JHook not fire if hotkeys declared after hooks declared?
 		fn := this._ProcessJHook.Bind(this)
 		; Activate joystick hotkeys
-		hotkey, IfWinActive
 		Loop % 8 {
 			joystr := A_Index "Joy"
 			Loop % 32 {
@@ -141,6 +145,9 @@ class _CHotkeyControl {
 				hotkey, % joystr A_Index, On
 			}
 		}
+
+		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this)) ; fn)
+		this._hHookMouse := this._SetWindowsHookEx(WH_MOUSE_LL, RegisterCallback(this._ProcessMHook,"Fast",,&this)) ; fn)
 		
 		; Wait for Bind Mode to end
 		Loop {
@@ -328,7 +335,7 @@ class _CHotkeyControl {
         
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
-		OutputDebug % "Processing Key Hook... " key " | event: " event " | WP: " wParam
+		;OutputDebug % "Processing Key Hook... " key " | event: " event " | WP: " wParam
 	
 		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
 		obj := {Type: "k", name: key , vk : vk, event: event, modifier: modifier}
@@ -431,7 +438,7 @@ class _CHotkeyControl {
 	}
 
 	_ProcessJHook(){
-		this._ProcessInput({Type: "j", name: A_ThisHotkey})
+		this._ProcessInput({Type: "j", name: A_ThisHotkey, event: 1})
 	}
 	
 	; All input (keyboard, mouse, joystick) should flow through here when in Bind Mode
@@ -445,6 +452,7 @@ class _CHotkeyControl {
 		if (!this._BindModeState){
 			return
 		}
+		
 		JoyUsed := 0
 		modifier := 0
 		out := "PROCESSINPUT: "
@@ -475,12 +483,11 @@ class _CHotkeyControl {
 				SoundBeep, 500, 200
 				return
 			}
-			this.event := 1
 			this._BindModeState := 0
 		}
 		
 		; Detect if Bind Mode should end
-		OutputDebug % out
+		;OutputDebug % out
 		if (obj.event = 0){
 			; key / button up
 			if (!modifier){
