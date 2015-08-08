@@ -431,7 +431,6 @@ class _CHotkeyControl {
 	}
 
 	_ProcessJHook(){
-		ToolTip % A_ThisHotkey
 		this._ProcessInput({Type: "j", name: A_ThisHotkey})
 	}
 	
