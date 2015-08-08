@@ -14,6 +14,7 @@ May need to tell hotkey handler to disable all hotkeys while in Bind Mode.
 Hotkey controls may need to be able to ensure uniqueness.
 
 */
+
 ; ----------------------------- Hotkey GuiControl class ---------------------------
 class _CHotkeyControl {
 	static _MenuText := "Select new Binding|Toggle Wild (*) |Toggle PassThrough (~)|Remove Binding"
@@ -127,16 +128,38 @@ class _CHotkeyControl {
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
 		Gui,  % hPrompt ":Show"
 		
+		; Activate hooks
 		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this)) ; fn)
 		this._hHookMouse := this._SetWindowsHookEx(WH_MOUSE_LL, RegisterCallback(this._ProcessMHook,"Fast",,&this)) ; fn)
+		fn := this._ProcessJHook.Bind(this)
+		; Activate joystick hotkeys
+		hotkey, IfWinActive
+		Loop % 8 {
+			joystr := A_Index "Joy"
+			Loop % 32 {
+				hotkey, % joystr A_Index, % fn
+				hotkey, % joystr A_Index, On
+			}
+		}
+		
+		; Wait for Bind Mode to end
 		Loop {
 			if (this._BindModeState = 0){
 				break
 			}
 			Sleep 10
-		}	
+		}
+		
+		; Bind mode ended, remove hooks
 		this._UnhookWindowsHookEx(this._hHookKeybd)
 		this._UnhookWindowsHookEx(this._hHookMouse)
+		hotkey, IfWinActive
+		Loop % 8 {
+			joystr := A_Index "Joy"
+			Loop % 32 {
+				hotkey, % joystr A_Index, Off
+			}
+		}
 		Gui,  % hPrompt ":Destroy"
 		
 		out := ""
@@ -159,6 +182,7 @@ class _CHotkeyControl {
 		l := this._SelectedInput.length()
 		Loop % l {
 			if (this._SelectedInput[A_Index].Type = "k" && this._SelectedInput[A_Index].modifier && A_Index != l){
+				; Convert keyboard modifiers from like LCtrl to ^ - do not do for last char as that is the "End Key"
 				hotkey_string .= modifier_symbols[this._SelectedInput[A_Index].vk]
 			} else {
 				hotkey_string .= this._SelectedInput[A_Index].name
@@ -189,6 +213,12 @@ class _CHotkeyControl {
 		if (hotkey_string = ""){
 			return "(Select to Bind)"
 		}
+		
+		JoyInfo := StrSplit(hotkey_string, "Joy")
+		if (JoyInfo[1] != "" && JoyInfo[2] != ""){
+			return "Joy " JoyInfo[1] " Btn " JoyInfo[2]
+		}
+		
 		str := ""
 		mode_str := ""
 		idx := 1
@@ -400,6 +430,11 @@ class _CHotkeyControl {
 		return 1
 	}
 
+	_ProcessJHook(){
+		ToolTip % A_ThisHotkey
+		this._ProcessInput({Type: "j", name: A_ThisHotkey})
+	}
+	
 	; All input (keyboard, mouse, joystick) should flow through here when in Bind Mode
 	_ProcessInput(obj){
 		;{Type: "k", name: keyname, code : keycode, event: event, modifier: modifier}
@@ -411,6 +446,7 @@ class _CHotkeyControl {
 		if (!this._BindModeState){
 			return
 		}
+		JoyUsed := 0
 		modifier := 0
 		out := "PROCESSINPUT: "
 		if (obj.Type = "k"){
@@ -435,7 +471,13 @@ class _CHotkeyControl {
 		} else if (obj.Type = "m"){
 			out .= "mouse = " obj.name
 		} else if (obj.Type = "j"){
-			
+			if (this._SelectedInput.length()){
+				; joystick buttons can only be bound without other keys or modifiers
+				SoundBeep, 500, 200
+				return
+			}
+			this.event := 1
+			this._BindModeState := 0
 		}
 		
 		; Detect if Bind Mode should end
