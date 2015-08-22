@@ -3,22 +3,62 @@
 ; Detects Joystick  input using a combination of button hotkeys and a GetKeyState loop for POV Hat
 
 #SingleInstance force
-ht := new HookTest()
+mc := new MyClass()
 return
 
 GuiClose:
-	ht.Exit()
+	mc.Exit()
 	ExitApp
 
-class HookTest {
+class MyClass{
 	__New(){
+		fn := this._ProcessInput.Bind(this)
+		this.hkhandler := new HkHandler(fn)
+		Gui, Add, ListView, hwndhwnd w280 h190, Code|Name|Event
+		LV_ModifyCol(2, 100)
+		this._hLV := hwndd
+		Gui, Show, w300 h200 x0 y0
+	}
+	
+	; All Input events should flow through here
+	_ProcessInput(obj){
+		static mouse_lookup := ["Lbutton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
+		static pov_directions := ["U", "R", "D", "L"]
+		static event_lookup := {0: "Release", 1: "Press"}
+		
+		if (obj.Type = "m"){
+			; Mouse button
+			key := mouse_lookup[obj.Code]
+		} else if (obj.Type = "k") {
+			; Keyboard Key
+			key := GetKeyName(Format("sc{:x}", obj.Code))
+		} else if (obj.Type = "j") {
+			; Joystick button
+			key := obj.joyid "Joy" obj.Code
+		} else if (obj.Type = "h") {
+			; Joystick hat
+			key := obj.joyid "JoyPOV" pov_directions[obj.Code]
+		}
+		
+		LV_Add(,obj.code, key, event_lookup[obj.event])
+		
+		; Do not block input
+		return 0
+	}
+
+	; Gui Closed
+	Exit(){
+		this.hkhandler.Exit()
+	}
+}
+
+; The hotkey handler class
+class HkHandler {
+	__New(callback){
 		static WH_KEYBOARD_LL := 13, WH_MOUSE_LL := 14
 		; Lookup table to accelerate finding which mouse button was pressed
 
-		Gui, Add, ListView, hwndhwnd w280 h190, Code|Name|Event
-		LV_ModifyCol(2, 100)
-		this._hLV := hwnd
-		Gui, Show, w300 h200 x0 y0
+		this._Callback := callback
 		
 		; Hook Input
 		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this))
@@ -35,39 +75,16 @@ class HookTest {
 		SetTimer, % fn, 10
 	}
 	
-	; Gui Closed
 	Exit(){
 		; remove hooks
 		this._UnhookWindowsHookEx(this._hHookKeybd)
 		this._UnhookWindowsHookEx(this._hHookMouse)
 	}
 
-	; All Input events should flow through here
-	_ProcessInput(obj){
-		static mouse_lookup := ["Lbutton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
-		static pov_directions := ["U", "R", "D", "L"]
-		static event_lookup := {0: "Release", 1: "Press"}
-		if (obj.Type = "m"){
-			; Mouse button
-			key := mouse_lookup[obj.Code]
-		} else if (obj.Type = "k") {
-			; Keyboard Key
-			key := GetKeyName(Format("sc{:x}", obj.Code))
-		} else if (obj.Type = "j") {
-			; Joystick button
-			key := obj.joyid "Joy" obj.Code
-		} else if (obj.Type = "h") {
-			; Joystick hat
-			key := obj.joyid "JoyPOV" pov_directions[obj.Code]
-		}
-		
-		LV_Add(,obj.code, key, event_lookup[obj.event])
-	}
-	
 	; Process Joystick button down events
 	_ProcessJHook(joyid, btn){
 		;ToolTip % "Joy " joyid " Btn " btn
-		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 1})
+		this._Callback.({Type: "j", Code: btn, joyid: joyid, event: 1})
 		fn := this._WaitForJoyUp.Bind(this, joyid, btn)
 		SetTimer, % fn, -0
 	}
@@ -78,7 +95,7 @@ class HookTest {
 		while (GetKeyState(str)){
 			sleep 10
 		}
-		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 0})
+		this._Callback.({Type: "j", Code: btn, joyid: joyid, event: 0})
 	}
 	
 	; A constantly running timer to emulate "button events" for Joystick POV directions (eg 2JoyPOVU, 2JoyPOVD...)
@@ -105,8 +122,7 @@ class HookTest {
 			
 			Loop 4 {
 				if (pov_direction_states[joyid, A_Index] != pov_direction_map[state, A_Index]){
-					;this._JoyPovChanged(joyid, A_Index, pov_direction_map[state, A_Index])
-					this._ProcessInput({Type: "h", Code: A_Index, joyid: joyid, event: pov_direction_map[state, A_Index]})
+					this._Callback({Type: "h", Code: A_Index, joyid: joyid, event: pov_direction_map[state, A_Index]})
 				}
 			}
 			pov_states[joyid] := pov
@@ -141,12 +157,15 @@ class HookTest {
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
         if ( ! (sc = 541 || (last_event = event && last_sc = sc) ) ){		; ignore non L/R Control. This key never happens except eg with RALT
-			this._ProcessInput({ Type: "k", Code: sc, event: event})
+			block := this._Callback.({ Type: "k", Code: sc, event: event})
 			last_sc := sc
 			last_event := event
-			
+			if (block){
+				return 1
+			}
 		}
 		Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookKeybd, "int", this, "Uint", wParam, "Uint", lParam)
+
 	}
 	
 	; Process Mouse Hook messages
@@ -213,12 +232,14 @@ class HookTest {
 		}
 		
 		;OutputDebug % "Mouse: " keyname ", event: " event
-		this._ProcessInput({Type: "m", Code: button, event: event})
+		block := this._Callback.({Type: "m", Code: button, event: event})
 		if (wParam = WM_MOUSEHWHEEL || wParam = WM_MOUSEWHEEL){
 			; Mouse wheel does not generate up event, simulate it.
-			this._ProcessInput({Type: "m", Code: button, event: 0})
+			this._Callback({Type: "m", Code: button, event: 0})
 		}
-		;return 1
+		if (block){
+			return 1
+		}
 		Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookMouse, "int", this, "Uint", wParam, "Uint", lParam)
 	}
 	
