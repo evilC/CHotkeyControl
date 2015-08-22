@@ -1,4 +1,7 @@
-; A script to decode the results from SetWindowsHookEx
+; A script to 
+; Detects keyboard and mouse input using SetWindowsHookEx
+; Detects Joystick  input using a combination of button hotkeys and a GetKeyState loop for Hat
+
 #SingleInstance force
 ht := new HookTest()
 return
@@ -27,20 +30,33 @@ class HookTest {
 				hotkey, % joyid "Joy" A_Index, % fn
 			}
 		}
+		fn := this._WatchJoystickPOV.Bind(this)
+		SetTimer, % fn, 10
 	}
 
+	; All Input events should flow through here
 	_ProcessInput(obj){
 		static mouse_lookup := ["Lbutton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
+		static pov_directions := ["U", "R", "D", "L"]
+		static event_lookup := {0: "Release", 1: "Press"}
 		if (obj.Type = "m"){
+			; Mouse button
 			key := mouse_lookup[obj.Code]
 		} else if (obj.Type = "k") {
+			; Keyboard Key
 			key := GetKeyName(Format("sc{:x}", obj.Code))
 		} else if (obj.Type = "j") {
+			; Joystick button
 			key := obj.joyid "Joy" obj.Code
+		} else if (obj.Type = "h") {
+			; Joystick hat
+			key := obj.joyid "JoyPOV" pov_directions[obj.Code]
 		}
-		LV_Add(,obj.code, key, obj.event)
+		
+		LV_Add(,obj.code, key, event_lookup[obj.event])
 	}
 	
+	; Process Joystick button down events
 	_ProcessJHook(joyid, btn){
 		;ToolTip % "Joy " joyid " Btn " btn
 		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 1})
@@ -48,6 +64,7 @@ class HookTest {
 		SetTimer, % fn, -0
 	}
 	
+	; Emulate up events for joystick buttons
 	_WaitForJoyUp(joyid, btn){
 		str := joyid "Joy" btn
 		while (GetKeyState(str)){
@@ -56,6 +73,40 @@ class HookTest {
 		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 0})
 	}
 	
+	; A constantly running timer to emulate "button events" for Joystick POV directions (eg 2JoyPOVU, 2JoyPOVD...)
+	_WatchJoystickPOV(){
+		static pov_states := [-1, -1, -1, -1, -1, -1, -1, -1]
+		static pov_strings := ["1JoyPOV", "2JoyPOV", "3JoyPOV", "4JoyPOV", "5JoyPOV", "6JoyPOV" ,"7JoyPOV" ,"8JoyPOV"]
+		static pov_direction_map := [[0,0,0,0], [1,0,0,0], [1,1,0,0] , [0,1,0,0], [0,1,1,0], [0,0,1,0], [0,0,1,1], [0,0,0,1], [1,0,0,1]]
+		static pov_direction_states := [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]]
+		Loop % 8 {
+			joyid := A_Index
+			if (!GetKeyState(joyid "JoyInfo")){
+				continue
+			}
+			pov := GetKeyState(pov_strings[joyid])
+			if (pov = pov_states[joyid]){
+				; do not process stick if nothing changed
+				continue
+			}
+			if (pov = -1){
+				state := 1
+			} else {
+				state := round(pov / 4500) + 2
+			}
+			
+			Loop 4 {
+				if (pov_direction_states[joyid, A_Index] != pov_direction_map[state, A_Index]){
+					;this._JoyPovChanged(joyid, A_Index, pov_direction_map[state, A_Index])
+					this._ProcessInput({Type: "h", Code: A_Index, joyid: joyid, event: pov_direction_map[state, A_Index]})
+				}
+			}
+			pov_states[joyid] := pov
+			pov_direction_states[joyid] := pov_direction_map[state]
+		}
+	}
+	
+	; Process Keyboard Hook messages
 	_ProcessKHook(wParam, lParam){
 		; KBDLLHOOKSTRUCT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644967%28v=vs.85%29.aspx
 		; KeyboardProc function: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644984(v=vs.85).aspx
@@ -90,6 +141,7 @@ class HookTest {
 		Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookKeybd, "int", this, "Uint", wParam, "Uint", lParam)
 	}
 	
+	; Process Mouse Hook messages
 	_ProcessMHook(wParam, lParam){
 		/*
 		typedef struct tagMSLLHOOKSTRUCT {
