@@ -15,12 +15,18 @@ class HookTest {
 		LV_ModifyCol(2, 100)
 		this._hLV := hwnd
 		Gui, Show, w300 h200 x0 y0
+		
+		; Hook Input
 		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this))
 		this._hHookMouse := this._SetWindowsHookEx(WH_MOUSE_LL, RegisterCallback(this._ProcessMHook,"Fast",,&this))
 		
-		;this._UnhookWindowsHookEx(this._hHookKeybd)
-		;this._UnhookWindowsHookEx(this._hHookMouse)
-
+		Loop 8 {
+			joyid := A_Index
+			Loop % 32 {
+				fn := this._ProcessJHook.Bind(this, joyid, A_Index)
+				hotkey, % joyid "Joy" A_Index, % fn
+			}
+		}
 	}
 
 	_ProcessInput(obj){
@@ -29,8 +35,25 @@ class HookTest {
 			key := mouse_lookup[obj.Code]
 		} else if (obj.Type = "k") {
 			key := GetKeyName(Format("sc{:x}", obj.Code))
+		} else if (obj.Type = "j") {
+			key := obj.joyid "Joy" obj.Code
 		}
 		LV_Add(,obj.code, key, obj.event)
+	}
+	
+	_ProcessJHook(joyid, btn){
+		;ToolTip % "Joy " joyid " Btn " btn
+		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 1})
+		fn := this._WaitForJoyUp.Bind(this, joyid, btn)
+		SetTimer, % fn, -0
+	}
+	
+	_WaitForJoyUp(joyid, btn){
+		str := joyid "Joy" btn
+		while (GetKeyState(str)){
+			sleep 10
+		}
+		this._ProcessInput({Type: "j", Code: btn, joyid: joyid, event: 0})
 	}
 	
 	_ProcessKHook(wParam, lParam){
