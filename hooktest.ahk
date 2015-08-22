@@ -7,7 +7,8 @@ ht := new HookTest()
 return
 
 GuiClose:
-ExitApp
+	ht.Exit()
+	ExitApp
 
 class HookTest {
 	__New(){
@@ -32,6 +33,13 @@ class HookTest {
 		}
 		fn := this._WatchJoystickPOV.Bind(this)
 		SetTimer, % fn, 10
+	}
+	
+	; Gui Closed
+	Exit(){
+		; remove hooks
+		this._UnhookWindowsHookEx(this._hHookKeybd)
+		this._UnhookWindowsHookEx(this._hHookMouse)
 	}
 
 	; All Input events should flow through here
