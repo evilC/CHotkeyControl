@@ -29,6 +29,8 @@ class _CHotkeyControl {
 		this._ParentHwnd := hwnd
 		this.Name := name
 		this._callback := callback
+		this._LastSC := -1
+		this._LastEvent := -1
 		
 		; Lookup table to accelerate finding which mouse button was pressed
 		this._MouseLookup := {}
@@ -128,7 +130,8 @@ class _CHotkeyControl {
 		this._SelectedInput := []
 		this._ModifiersUsed := []
 		this._NonModifierCount := 0
-		this._LastInput := {}
+		this._LastSC := -1
+		this._LastEvent := -1
 		
 		Gui, new, hwndhPrompt -Border +AlwaysOnTop
 		Gui, % hPrompt ":Add", Text, w300 h100 Center, BIND MODE`n`nPress the desired key combination.`n`nBinding ends when you release a key.`nPress Esc to exit.
@@ -319,6 +322,7 @@ class _CHotkeyControl {
 		; Use Repeat count, transition state bits from lParam to filter keys
 		
 		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN := 0x104
+		;static last_sc := -1, last_event := -1
 		
 		Critical
 		
@@ -331,7 +335,8 @@ class _CHotkeyControl {
 		Extended := NumGet(lParam+0, 8, "UInt") & 1
 		sc := (Extended<<8)|NumGet(lParam+0, 4, "UInt")
 		sc := sc = 0x136 ? 0x36 : sc
-        key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
+        ;key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
+		key := GetKeyName(Format("sc{:x}", sc))
         
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
@@ -340,20 +345,19 @@ class _CHotkeyControl {
 		modifier := (vk >= 160 && vk <= 165) || (vk >= 91 && vk <= 93)
 		obj := {Type: "k", name: key , vk : vk, event: event, modifier: modifier}
 			
-		; Filter repeated down events
-		if (event) {
-			if (this._InputCompare(obj, this._LastInput)){
-				return 1
-			}
-			
-			this._LastInput := obj
-		}
-
-
-
 		;OutputDebug, % "Key VK: " vk ", event: " event ", name: " GetKeyName(Format("vk{:x}", vk)) ", modifier: " modifier
 		
-		this._ProcessInput(obj)
+		; Decide whether to ignore input or not
+		; Ignored input is:
+		; Repeat down events
+		; Events for Control key that is not a L/R variant (ie Control, not LControl) as this is sent when RALT is pressed.
+		if ( ! (sc = 541 || (this._LastEvent = event && this._LastSC = sc) ) ){
+			
+			this._ProcessInput(obj)
+			this._LastSC := sc
+			this._LastEvent := event
+		}
+
 		return 1	; block key
 	}
 	
