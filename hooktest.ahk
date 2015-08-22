@@ -10,13 +10,6 @@ class HookTest {
 	__New(){
 		static WH_KEYBOARD_LL := 13, WH_MOUSE_LL := 14
 		; Lookup table to accelerate finding which mouse button was pressed
-		this._MouseLookup := {}
-		this._MouseLookup[0x201] := { name: "LButton", event: 1 }
-		this._MouseLookup[0x202] := { name: "LButton", event: 0 }
-		this._MouseLookup[0x204] := { name: "RButton", event: 1 }
-		this._MouseLookup[0x205] := { name: "RButton", event: 0 }
-		this._MouseLookup[0x207] := { name: "MButton", event: 1 }
-		this._MouseLookup[0x208] := { name: "MButton", event: 0 }
 
 		Gui, Add, ListView, hwndhwnd w280 h190, Code|Name|Event
 		LV_ModifyCol(2, 100)
@@ -31,7 +24,13 @@ class HookTest {
 	}
 
 	_ProcessInput(obj){
-		LV_Add(,obj.code, obj.name, obj.event)
+		static mouse_lookup := ["Lbutton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
+		if (obj.Type = "m"){
+			key := mouse_lookup[obj.Code]
+		} else if (obj.Type = "k") {
+			key := GetKeyName(Format("sc{:x}", obj.Code))
+		}
+		LV_Add(,obj.code, key, obj.event)
 	}
 	
 	_ProcessKHook(wParam, lParam){
@@ -57,11 +56,10 @@ class HookTest {
 		sc := (Extended<<8)|NumGet(lParam+0, 4, "UInt")
 		sc := sc = 0x136 ? 0x36 : sc
         ;key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
-		key := GetKeyName(Format("sc{:x}", sc))
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
         if ( ! (sc = 541 || (last_event = event && last_sc = sc) ) ){		; ignore non L/R Control. This key never happens except eg with RALT
-			this._ProcessInput({ Type: "k", Code: sc, event: event, name: key })
+			this._ProcessInput({ Type: "k", Code: sc, event: event})
 			last_sc := sc
 			last_event := event
 			
@@ -94,10 +92,9 @@ class HookTest {
 		event := 0
 		button := 0
 		
-		if (IsObject(this._MouseLookup[wParam])){
+		;if (IsObject(this._MouseLookup[wParam])){
+		if (ObjHasKey(button_map, wParam)){
 			; L / R / M  buttons
-			keyname := this._MouseLookup[wParam].name
-			;event := 1
 			button := button_map[wParam]
 			event := button_event[wParam]
 		} else {
@@ -109,21 +106,15 @@ class HookTest {
 				; Mouse Wheel - mouseData indicate direction (up/down)
 				event := 1	; wheel has no up event, only down
 				if (wParam = WM_MOUSEWHEEL){
-					keyname .= "Wheel"
 					if (mouseData > 1){
-						keyname .= "Up"
 						button := 6
 					} else {
-						keyname .= "Down"
 						button := 7
 					}
 				} else {
-					keyname .= "Wheel"
 					if (mouseData < 1){
-						keyname .= "Left"
 						button := 8
 					} else {
-						keyname .= "Right"
 						button := 9
 					}
 				}
@@ -134,16 +125,15 @@ class HookTest {
 				} else {
 					event := 0
 				}
-				keyname := "XButton" mouseData
 				button := 3 + mouseData
 			}
 		}
 		
 		;OutputDebug % "Mouse: " keyname ", event: " event
-		this._ProcessInput({Type: "m", Code: button, name: keyname, event: event})
+		this._ProcessInput({Type: "m", Code: button, event: event})
 		if (wParam = WM_MOUSEHWHEEL || wParam = WM_MOUSEWHEEL){
 			; Mouse wheel does not generate up event, simulate it.
-			this._ProcessInput({Type: "m", Code: button, name: keyname, event: 0})
+			this._ProcessInput({Type: "m", Code: button, event: 0})
 		}
 		;return 1
 		Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookMouse, "int", this, "Uint", wParam, "Uint", lParam)
