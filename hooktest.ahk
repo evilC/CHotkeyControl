@@ -14,8 +14,8 @@ class MyClass{
 	__New(){
 		fn := this._ProcessInput.Bind(this)
 		this.hkhandler := new HkHandler(fn)
-		Gui, Add, ListView, w280 h190, Code|Name|Event
-		LV_ModifyCol(2, 100)
+		Gui, Add, ListView, w280 h190, Type|Code|Name|Event
+		LV_ModifyCol(3, 100)
 		Gui, Show, w300 h200 x0 y0
 	}
 	
@@ -39,7 +39,7 @@ class MyClass{
 			key := obj.joyid "JoyPOV" pov_directions[obj.Code]
 		}
 		
-		LV_Add(,obj.code, key, event_lookup[obj.event])
+		LV_Add(,obj.Type, obj.code, key, event_lookup[obj.event])
 		
 		; Do not block input
 		return 0
@@ -121,7 +121,7 @@ class HkHandler {
 			
 			Loop 4 {
 				if (pov_direction_states[joyid, A_Index] != pov_direction_map[state, A_Index]){
-					this._Callback({Type: "h", Code: A_Index, joyid: joyid, event: pov_direction_map[state, A_Index]})
+					this._Callback.({Type: "h", Code: A_Index, joyid: joyid, event: pov_direction_map[state, A_Index]})
 				}
 			}
 			pov_states[joyid] := pov
