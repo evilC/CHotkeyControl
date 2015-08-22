@@ -1,6 +1,6 @@
-; A script to 
+; A script to process all forms of input and generate events any time anything changes.
 ; Detects keyboard and mouse input using SetWindowsHookEx
-; Detects Joystick  input using a combination of button hotkeys and a GetKeyState loop for Hat
+; Detects Joystick  input using a combination of button hotkeys and a GetKeyState loop for POV Hat
 
 #SingleInstance force
 ht := new HookTest()
