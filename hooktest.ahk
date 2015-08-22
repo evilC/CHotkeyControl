@@ -14,9 +14,8 @@ class MyClass{
 	__New(){
 		fn := this._ProcessInput.Bind(this)
 		this.hkhandler := new HkHandler(fn)
-		Gui, Add, ListView, hwndhwnd w280 h190, Code|Name|Event
+		Gui, Add, ListView, w280 h190, Code|Name|Event
 		LV_ModifyCol(2, 100)
-		this._hLV := hwndd
 		Gui, Show, w300 h200 x0 y0
 	}
 	
@@ -181,8 +180,8 @@ class HkHandler {
 		*/
 		; MSLLHOOKSTRUCT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644970(v=vs.85).aspx
 		static WM_LBUTTONDOWN := 0x0201, WM_LBUTTONUP := 0x0202 , WM_RBUTTONDOWN := 0x0204, WM_RBUTTONUP := 0x0205, WM_MBUTTONDOWN := 0x0207, WM_MBUTTONUP := 0x0208, WM_MOUSEHWHEEL := 0x20E, WM_MOUSEWHEEL := 0x020A, WM_XBUTTONDOWN := 0x020B, WM_XBUTTONUP := 0x020C
-		static button_map := {0x0201: 1, 0x0202: 1 , 0x0204: 2, 0x0205: 2, 0x0207: 3, x0208: 3}
-		static button_event := {0x0201: 1, 0x0202: 0 , 0x0204: 1, 0x0205: 0, 0x0207: 1, x0208: 0}
+		static button_map := {0x0201: 1, 0x0202: 1 , 0x0204: 2, 0x0205: 2, 0x0207: 3, 0x208: 3}
+		static button_event := {0x0201: 1, 0x0202: 0 , 0x0204: 1, 0x0205: 0, 0x0207: 1, 0x208: 0}
 		Critical
 		if (this<0 || wParam = 0x200){
 			Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookMouse, "int", this, "Uint", wParam, "Uint", lParam)
@@ -235,7 +234,7 @@ class HkHandler {
 		block := this._Callback.({Type: "m", Code: button, event: event})
 		if (wParam = WM_MOUSEHWHEEL || wParam = WM_MOUSEWHEEL){
 			; Mouse wheel does not generate up event, simulate it.
-			this._Callback({Type: "m", Code: button, event: 0})
+			this._Callback.({Type: "m", Code: button, event: 0})
 		}
 		if (block){
 			return 1
