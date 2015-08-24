@@ -63,11 +63,20 @@ class HkHandler {
 		this._hHookKeybd := this._SetWindowsHookEx(WH_KEYBOARD_LL, RegisterCallback(this._ProcessKHook,"Fast",,&this))
 		this._hHookMouse := this._SetWindowsHookEx(WH_MOUSE_LL, RegisterCallback(this._ProcessMHook,"Fast",,&this))
 		
+		this._JoysticksWithHats := []
 		Loop 8 {
 			joyid := A_Index
-			Loop % 32 {
-				fn := this._ProcessJHook.Bind(this, joyid, A_Index)
-				hotkey, % joyid "Joy" A_Index, % fn
+			joyinfo := GetKeyState(joyid "JoyInfo")
+			if (joyinfo){
+				; watch buttons
+				Loop % 32 {
+					fn := this._ProcessJHook.Bind(this, joyid, A_Index)
+					hotkey, % joyid "Joy" A_Index, % fn
+				}
+				; Watch POVs
+				if (instr(joyinfo, "p")){
+					this._JoysticksWithHats.push(joyid)
+				}
 			}
 		}
 		fn := this._WatchJoystickPOV.Bind(this)
@@ -103,11 +112,8 @@ class HkHandler {
 		static pov_strings := ["1JoyPOV", "2JoyPOV", "3JoyPOV", "4JoyPOV", "5JoyPOV", "6JoyPOV" ,"7JoyPOV" ,"8JoyPOV"]
 		static pov_direction_map := [[0,0,0,0], [1,0,0,0], [1,1,0,0] , [0,1,0,0], [0,1,1,0], [0,0,1,0], [0,0,1,1], [0,0,0,1], [1,0,0,1]]
 		static pov_direction_states := [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]]
-		Loop % 8 {
-			joyid := A_Index
-			if (!GetKeyState(joyid "JoyInfo")){
-				continue
-			}
+		Loop % this._JoysticksWithHats.length() {
+			joyid := this._JoysticksWithHats[A_Index]
 			pov := GetKeyState(pov_strings[joyid])
 			if (pov = pov_states[joyid]){
 				; do not process stick if nothing changed
