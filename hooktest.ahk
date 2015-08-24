@@ -53,6 +53,7 @@ class MyClass{
 
 ; The hotkey handler class
 class HkHandler {
+	#MaxThreadsPerHotkey 1000
 	__New(callback){
 		static WH_KEYBOARD_LL := 13, WH_MOUSE_LL := 14
 		; Lookup table to accelerate finding which mouse button was pressed
