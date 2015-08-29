@@ -1,105 +1,141 @@
 ; Proof of concept for replacement for HotClass
+
+;============================================================================================================
+; Example user script
+;============================================================================================================
 #SingleInstance force
-hkh := new HotkeyHandler()
+mc := new MyClass()
 return
 
 GuiClose:
 	hkh.Exit()
 	ExitApp
 
-class HotkeyHandler{
-	#MaxThreadsPerHotkey 100
+class MyClass {
 	__New(){
-		this._BindMode := 0
-		fn := this._ProcessInput.Bind(this)
-		this.CInputDetector := new CInputDetector(fn)
-		;Gui, Add, ListView, w280 h190, Type|Code|Name|Event
-		;LV_ModifyCol(3, 100)
-		Gui, Add, Edit, hwndhwnd w200 Disabled
-		this.hEdit := hwnd
-		Gui, Add, Button, hwndhwnd xp+210, Bind
-		this.hBind := hwnd
-		fn := this.BindMode.Bind(this)
-		GuiControl +g, % hwnd, % fn
-		;Gui, Show, w300 h200 x0 y0
+		this.HotClass := new HotClass()
+		this.HotClass.AddHotkey("hk1")
 		Gui, Show, x0 y0
 	}
-	
-	BindMode(){
-		this._BindMode := 1
-		this._BindList := []
+}
+
+;============================================================================================================
+; Libraries
+;============================================================================================================
+
+;------------------------------------------------------------------------------------------------------------
+; Class that manages ALL hotkeys for the script
+;------------------------------------------------------------------------------------------------------------
+class HotClass{
+	#MaxThreadsPerHotkey 256	; required for joystick input as (8 * 32) hotkeys are declared to watch for button down events.
+	__New(){
+		this._BindMode := 0				; Whether Bind mode is on or off
+		this._BindName := ""			; The name of the hotkey that is being bound
+		this._Hotkeys := {}				; a name indexed array of hotkey objects
+		this._HeldKeys := {}			; The list of keys that are currently held
+		
+		this.CInputDetector := new CInputDetector(this._ProcessInput.Bind(this))
 	}
 	
-	; All Input events should flow through here
+	; All Input Events flow through here - ie an input device changes state
+	; Encompasses keyboard keys, mouse buttons / wheel and joystick buttons or hat directions
 	_ProcessInput(obj){
-		static mouse_lookup := ["LButton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
-		static pov_directions := ["U", "R", "D", "L"]
-		static event_lookup := {0: "Release", 1: "Press"}
-		
 		if (this._BindMode){
+			; Bind mode - block all input and build up a list of held keys
 			if (obj.event = 1){
+				; Down event - add pressed key to list of held keys
 				this._BindList.push(obj)
 			} else {
+				; Up event in bind mode - end bind mode, set binding
 				this._BindMode := 0
-				out := ""
-
-				Loop % this._BindList.length(){
-					if (A_Index > 1){
-						out .= " + "
-					}
-					obj := this._BindList[A_Index]
-					if (obj.Type = "m"){
-						; Mouse button
-						key := mouse_lookup[obj.Code]
-					} else if (obj.Type = "k") {
-						; Keyboard Key
-						key := GetKeyName(Format("sc{:x}", obj.Code))
-						if (StrLen(key) = 1){
-							StringUpper, key, key
-						}
-					} else if (obj.Type = "j") {
-						; Joystick button
-						key := obj.joyid "Joy" obj.Code
-					} else if (obj.Type = "h") {
-						; Joystick hat
-						key := obj.joyid "JoyPOV" pov_directions[obj.Code]
-					}
-					out .= key
-				}
-				GuiControl,, % this.hEdit, % out
+				this._Hotkeys[this._BindName].SetBinding(this._BindList)
 			}
-			return 1
+			return 1 ; block input
 		} else {
-			/*
-			if (obj.Type = "m"){
-				; Mouse button
-				key := mouse_lookup[obj.Code]
-			} else if (obj.Type = "k") {
-				; Keyboard Key
-				key := GetKeyName(Format("sc{:x}", obj.Code))
-			} else if (obj.Type = "j") {
-				; Joystick button
-				key := obj.joyid "Joy" obj.Code
-			} else if (obj.Type = "h") {
-				; Joystick hat
-				key := obj.joyid "JoyPOV" pov_directions[obj.Code]
-			}
+			; Normal operation
+			; As each key goes down, add it to the list of held keys
+			; Then check the bound hotkeys (longest to shortest) to check if there is a match
 		
-			LV_Add(,obj.Type, obj.code, key, event_lookup[obj.event])
-		
-			; Do not block input
-			*/
-			return 0
+			return 0 ; don't block input
 		}
 	}
 
+	; User command to add a new hotkey
+	AddHotkey(name){
+		this._Hotkeys[name] := new this._Hotkey(this, name)
+	}
+	
+	; Initializes Bind Mode.
+	; Hotkey GUI Control Bind Buttons call this function
+	_EnableBindMode(name){
+		this._BindMode := 1
+		this._BindName := name
+		this._BindList := []
+	}
+	
+	; Each hotkey is an instance of this class.
+	; Handles the Gui control and routing of callbacks when the hotkey triggers
+	class _Hotkey {
+		__New(handler, name){
+			this._handler := handler
+			this.name := name
+			this.BindList := {}
+			
+			Gui, Add, Edit, hwndhwnd w200 Disabled
+			this.hEdit := hwnd
+			Gui, Add, Button, hwndhwnd xp+210, Bind
+			this.hBind := hwnd
+			fn := this._handler._EnableBindMode.Bind(handler, name)
+			GuiControl +g, % hwnd, % fn
+		}
+		
+		SetBinding(BindList){
+			this.BindList := BindList
+			GuiControl,, % this.hEdit, % this.BuildHumanReadable(BindList)
+		}
+		
+		BuildHumanReadable(BindList){
+			static mouse_lookup := ["LButton", "RButton", "MButton", "XButton1", "XButton2", "WheelU", "WheelD", "WheelL", "WheelR"]
+			static pov_directions := ["U", "R", "D", "L"]
+			static event_lookup := {0: "Release", 1: "Press"}
+			
+			out := ""
+			Loop % BindList.length(){
+				if (A_Index > 1){
+					out .= " + "
+				}
+				obj := BindList[A_Index]
+				if (obj.Type = "m"){
+					; Mouse button
+					key := mouse_lookup[obj.Code]
+				} else if (obj.Type = "k") {
+					; Keyboard Key
+					key := GetKeyName(Format("sc{:x}", obj.Code))
+					if (StrLen(key) = 1){
+						StringUpper, key, key
+					}
+				} else if (obj.Type = "j") {
+					; Joystick button
+					key := obj.joyid "Joy" obj.Code
+				} else if (obj.Type = "h") {
+					; Joystick hat
+					key := obj.joyid "JoyPOV" pov_directions[obj.Code]
+				}
+				out .= key
+			}
+			return out
+		}
+	}
+	
 	; Gui Closed
 	Exit(){
 		this.CInputDetector.Exit()
 	}
 }
 
-; The hotkey handler class
+;------------------------------------------------------------------------------------------------------------
+; Sets up the hooks etc to watch for input
+;------------------------------------------------------------------------------------------------------------
 class CInputDetector {
 	__New(callback){
 		static WH_KEYBOARD_LL := 13, WH_MOUSE_LL := 14
