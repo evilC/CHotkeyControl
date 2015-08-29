@@ -32,6 +32,7 @@ class HotClass{
 	; startactive param decides 
 	__New(options := 0){
 		this.STATES := {IDLE: 0, ACTIVE: 1, BIND: 2}		; State Name constants, for human readibility
+		this._HotkeyCache := []
 		
 		this._FuncEscTimer := this._EscTimer.Bind(this)
 
@@ -71,18 +72,41 @@ class HotClass{
 			this._BindName := ""					; The name of the hotkey that is being bound
 			this._Hotkeys := {}						; a name indexed array of hotkey objects
 			this._HeldKeys := []					; The keys that are currently held
+			OutputDebug % "ENTERED IDLE STATE"
+			return 1
 		} else if (state == this.STATES.ACTIVE ){
 			; Enter ACTIVE state, no args required
+			out := ""
 			if (this._State == this.STATES.BIND){
 				; Transition from BIND state
+				; Build size-ordered list of hotkeys
+				out := ", ADDED " this._HeldKeys.length() " key combo hotkey"
+				currentlength := 0
+				count := 0
+				this._HotkeyCache := []
 				for name, hk in this._Hotkeys {
-					OutputDebug % name
+					count++
+					if (hk.length() > currentlength){
+						currentlength := hk.length()
+					}
 				}
+				hotkeys := this._Hotkeys.clone()
+				while (Count){
+					for name, hotkey in hotkeys {
+						if (hotkey.length() = currentlength){
+							;this._HotkeyCache.push({name: name, hotkey: hotkey})
+							this._HotkeyCache.push(hotkey)
+							hotkeys.Remove(name)
+							Count--
+						}
+					}
+				}
+				OutputDebug % "Hotkey Type: " this._HotkeyCache[1].Value[1].Type
 			}
-			; ToDo: Build ordered list of bound hotkeys
 			this.CInputDetector.EnableHooks()
 			this._HeldKeys := []
 			this._State := state
+			OutputDebug % "ENTERED ACTIVE STATE" out
 			return 1
 		} else if (state == this.STATES.BIND ){
 			; Enter BIND state.
@@ -92,6 +116,7 @@ class HotClass{
 				this._HeldKeys := []
 				this._BindName := args[1]
 				this._State := state
+				OutputDebug % "ENTERED BINDING STATE FOR HOTKEY NAME: " args[1]
 				return 1
 			}
 		}
@@ -105,7 +130,6 @@ class HotClass{
 		if (this._State == this.STATES.BIND){
 			; Bind mode - block all input and build up a list of held keys
 			if (keyevent.event = 1){
-				OutputDebug % keyevent.Type ": " keyevent.Code
 				if (keyevent.Type = "k" && keyevent.Code == 1){
 					; Escape down - start timer to detect hold of escape to quit
 					fn := this._FuncEscTimer
@@ -133,24 +157,72 @@ class HotClass{
 			return 1 ; block input
 		} else if (this._State == this.STATES.ACTIVE){
 			; ACTIVE state - aka "Normal Operation". Trigger hotkey callbacks as appropriate
-			; As each key goes down, add it to the list of held keys
-			; Then check the bound hotkeys (longest to shortest) to check if there is a match
-			
 			if (keyevent.event = 1){
+				; As each key goes down, add it to the list of held keys
+			
+				; Check the bound hotkeys (longest to shortest) to check if there is a match
+			
 				; down event
-				
+				if (!this._CompareHotkeys([keyevent], this._HeldKeys)){
+					this._HeldKeys.push(keyevent)
+					OutputDebug % "Adding to list of held keys: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
+				}
+
 				; Check list of bound hotkeys for matches.
+				Loop % this._HotkeyCache.length(){
+					hk := A_Index
+					if (this._CompareHotkeys(this._HotkeyCache[hk].Value, this._HeldKeys)){
+						SoundBeep, 1000, 150
+						;OutputDebug % "TRIGGER " this._HotkeyCache[hk].name
+					}
+				}
 				; List must be indexed LONGEST (most keys in combination) to SHORTEST (least keys in combination) to ensure correct behavior
 				; ie if CTRL+A and A are both bound, pressing CTRL+A should match CTRL+A before A.
 			} else {
-				; up event
-				; Remove key from list of held keys
+				OutputDebug % "Release: comparing " keyevent.joyid keyevent.type keyevent.Code " against " this._HeldKeys.length() " held keys."
+				pos := this._CompareHotkeys([keyevent], this._HeldKeys)
+				if (pos){
+					this._HeldKeys.Remove(pos)
+					OutputDebug % "Removing item " pos " from list: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
+				}
 			}
+			;out .=  " Now " this._HeldKeys.length() " keys"
 		}
 		; Default to not blocking input
 		return 0 ; don't block input
 	}
 
+	; All of needle must be in haystack
+	_CompareHotkeys(needle, haystack){
+		length := needle.length()
+		Count := 0
+		; Loop through elements of the needle
+		Loop % length {
+			ni := A_Index
+			; Loop through the haystack to see if this item is present
+			Loop % haystack.length() {
+				hi := A_Index
+				n := needle[ni].joyid needle[ni].type needle[ni].Code
+				h := haystack[hi].joyid haystack[hi].type haystack[hi].Code
+				out := n " = " h " ? "
+				if (n = h){
+					OutputDebug % out "YES"
+					count++
+					if (Count = length){
+						break
+					}
+				} else {
+					OutputDebug % out "NO"
+				}
+			}
+		}
+		
+		if (Count = length){
+			return hi
+		}
+		return 0
+	}
+	
 	; User command to add a new hotkey
 	AddHotkey(name){
 		; ToDo: Ensure unique name
