@@ -33,6 +33,8 @@ class HotClass{
 	__New(options := 0){
 		this.STATES := {IDLE: 0, ACTIVE: 1, BIND: 2}		; State Name constants, for human readibility
 		
+		this._FuncEscTimer := this._EscTimer.Bind(this)
+
 		; Set default options
 		if (!IsObject(options) || options == 0){
 			options := {StartActive: 1}
@@ -68,16 +70,18 @@ class HotClass{
 			this._State := state
 			this._BindName := ""					; The name of the hotkey that is being bound
 			this._Hotkeys := {}						; a name indexed array of hotkey objects
-			this._HeldKeys := {}					; The list of keys that are currently held
-			this._BindList := {}					; In Bind mode, the keys that are currently held
+			this._HeldKeys := []					; The keys that are currently held
 		} else if (state == this.STATES.ACTIVE ){
 			; Enter ACTIVE state, no args required
 			if (this._State == this.STATES.BIND){
-				; Transition from BIND state - binding data will be in this._BindList etc.
+				; Transition from BIND state
+				for name, hk in this._Hotkeys {
+					OutputDebug % name
+				}
 			}
 			; ToDo: Build ordered list of bound hotkeys
 			this.CInputDetector.EnableHooks()
-			this._HeldKeys := {}
+			this._HeldKeys := []
 			this._State := state
 			return 1
 		} else if (state == this.STATES.BIND ){
@@ -85,9 +89,9 @@ class HotClass{
 			; args[1] = name of hotkey requesting state change
 			this.CInputDetector.EnableHooks()
 			if (args.length()){
-				this._State := state
+				this._HeldKeys := []
 				this._BindName := args[1]
-				this._BindList := []
+				this._State := state
 				return 1
 			}
 		}
@@ -101,18 +105,30 @@ class HotClass{
 		if (this._State == this.STATES.BIND){
 			; Bind mode - block all input and build up a list of held keys
 			if (keyevent.event = 1){
+				OutputDebug % keyevent.Type ": " keyevent.Code
+				if (keyevent.Type = "k" && keyevent.Code == 1){
+					; Escape down - start timer to detect hold of escape to quit
+					fn := this._FuncEscTimer
+					SetTimer, % fn, -1000
+				}
 				; Down event - add pressed key to list of held keys
-				this._BindList.push(keyevent)
+				this._HeldKeys.push(keyevent)
 			} else {
 				; Up event in bind mode - state change from bind mode to normal mode
-				this.ChangeState(this.STATES.ACTIVE)
+				if (keyevent.Type = "k" && keyevent.Code == 1){
+					; Escape up - stop timer to detect hold of escape to quit
+					fn := this._FuncEscTimer
+					SetTimer, % fn, Off
+				}
 				
 				;ToDo: Check if hotkey is duplicate, and if so, reject.
 				
 				; set state of hotkey class
-				this._Hotkeys[this._BindName].SetBinding(this._BindList)
+				this._Hotkeys[this._BindName].SetBinding(this._HeldKeys)
 				
-				; Build Bind List for fast matching in normal mode
+				; Trigger state change
+				this.ChangeState(this.STATES.ACTIVE)
+
 			}
 			return 1 ; block input
 		} else if (this._State == this.STATES.ACTIVE){
@@ -122,7 +138,6 @@ class HotClass{
 			
 			if (keyevent.event = 1){
 				; down event
-				this._HeldKeys.push(keyevent)	; add key to list of held keys
 				
 				; Check list of bound hotkeys for matches.
 				; List must be indexed LONGEST (most keys in combination) to SHORTEST (least keys in combination) to ensure correct behavior
@@ -142,6 +157,12 @@ class HotClass{
 		this._Hotkeys[name] := new this._Hotkey(this, name)
 	}
 	
+	; Called on a Timer to detect timeout of Escape key in Bind Mode
+	_EscTimer(){
+		this._BindList := {}
+		this.ChangeState(this.STATES.ACTIVE)
+	}
+	
 	; Each hotkey is an instance of this class.
 	; Handles the Gui control and routing of callbacks when the hotkey triggers
 	class _Hotkey {
@@ -149,6 +170,7 @@ class HotClass{
 			this._handler := handler
 			this.name := name
 			this.BindList := {}
+			this.Value := {}		; Holds the current binding
 			
 			Gui, Add, Edit, hwndhwnd w200 Disabled
 			this.hEdit := hwnd
@@ -161,6 +183,7 @@ class HotClass{
 		SetBinding(BindList){
 			this.BindList := BindList
 			GuiControl,, % this.hEdit, % this.BuildHumanReadable(BindList)
+			this.Value := BindList
 		}
 		
 		BuildHumanReadable(BindList){
