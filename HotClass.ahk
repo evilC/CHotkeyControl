@@ -33,7 +33,7 @@ class HotClass{
 	__New(options := 0){
 		this.STATES := {IDLE: 0, ACTIVE: 1, BIND: 2}		; State Name constants, for human readibility
 		this._HotkeyCache := []
-		
+		this._ActiveHotkeys := []
 		this._FuncEscTimer := this._EscTimer.Bind(this)
 
 		; Set default options
@@ -72,6 +72,7 @@ class HotClass{
 			this._BindName := ""					; The name of the hotkey that is being bound
 			this._Hotkeys := {}						; a name indexed array of hotkey objects
 			this._HeldKeys := []					; The keys that are currently held
+			this._ActiveHotkeys := []				; Hotkeys which are currently in a down state
 			OutputDebug % "ENTERED IDLE STATE"
 			return 1
 		} else if (state == this.STATES.ACTIVE ){
@@ -105,6 +106,7 @@ class HotClass{
 			}
 			this.CInputDetector.EnableHooks()
 			this._HeldKeys := []
+			this._ActiveHotkeys := {}
 			this._State := state
 			OutputDebug % "ENTERED ACTIVE STATE" out
 			return 1
@@ -163,27 +165,45 @@ class HotClass{
 				; Check the bound hotkeys (longest to shortest) to check if there is a match
 			
 				; down event
-				if (!this._CompareHotkeys([keyevent], this._HeldKeys)){
-					this._HeldKeys.push(keyevent)
-					OutputDebug % "Adding to list of held keys: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
-				}
+				this._HeldKeys.push(keyevent)
+				;OutputDebug % "Adding to list of held keys: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
 
 				; Check list of bound hotkeys for matches.
 				Loop % this._HotkeyCache.length(){
 					hk := A_Index
-					if (this._CompareHotkeys(this._HotkeyCache[hk].Value, this._HeldKeys)){
+					; Supress Repeats - eg if A is bound, and A is held, do not fire A again if B is pressed.
+					match := this._CompareHotkeys(this._HotkeyCache[hk].Value, this._HeldKeys)
+					if (match){
+						name := this._HotkeyCache[hk].name
+						if (this._ActiveHotkeys[name] == 1){
+							return 0
+						}
 						SoundBeep, 1000, 150
-						;OutputDebug % "TRIGGER " this._HotkeyCache[hk].name
+						;OutputDebug % "TRIGGER DOWN: " name
+						this._ActiveHotkeys[name] := 1
 					}
 				}
 				; List must be indexed LONGEST (most keys in combination) to SHORTEST (least keys in combination) to ensure correct behavior
 				; ie if CTRL+A and A are both bound, pressing CTRL+A should match CTRL+A before A.
 			} else {
-				OutputDebug % "Release: comparing " keyevent.joyid keyevent.type keyevent.Code " against " this._HeldKeys.length() " held keys."
+				;OutputDebug % "Release: comparing " keyevent.joyid keyevent.type keyevent.Code " against " this._HeldKeys.length() " held keys."
 				pos := this._CompareHotkeys([keyevent], this._HeldKeys)
 				if (pos){
 					this._HeldKeys.Remove(pos)
-					OutputDebug % "Removing item " pos " from list: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
+					;OutputDebug % "Removing item " pos " from list: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
+				}
+				;OutputDebug % "Checking " this._ActiveHotkeys.length() " active hotkeys..."
+				for name, hotkey in this._ActiveHotkeys {
+					match := 0
+					;OutputDebug % "Checking if active hotkey " name " should be released"
+					if (!this._CompareHotkeys(this._Hotkeys[name].Value, this._HeldKeys)){
+						match := 1
+					}
+					if (match){
+						;OutputDebug % "TRIGGER UP: " name
+						this._ActiveHotkeys.Remove(name)
+						SoundBeep, 500, 150
+					}
 				}
 			}
 			;out .=  " Now " this._HeldKeys.length() " keys"
@@ -191,7 +211,7 @@ class HotClass{
 		; Default to not blocking input
 		return 0 ; don't block input
 	}
-
+	
 	; All of needle must be in haystack
 	_CompareHotkeys(needle, haystack){
 		length := needle.length()
@@ -204,15 +224,15 @@ class HotClass{
 				hi := A_Index
 				n := needle[ni].joyid needle[ni].type needle[ni].Code
 				h := haystack[hi].joyid haystack[hi].type haystack[hi].Code
-				out := n " = " h " ? "
+				;out := n " = " h " ? "
 				if (n = h){
-					OutputDebug % out "YES"
+					;OutputDebug % out "YES"
 					count++
 					if (Count = length){
 						break
 					}
 				} else {
-					OutputDebug % out "NO"
+					;OutputDebug % out "NO"
 				}
 			}
 		}
