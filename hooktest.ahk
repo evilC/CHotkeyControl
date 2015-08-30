@@ -142,7 +142,7 @@ class HkHandler {
 		; KeyboardProc function: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644984(v=vs.85).aspx
 		
 		; ToDo:
-		; Use Repeat count, transition state bits from lParam to filter keys
+		; Repeat filtering not working perfectly. Hold CTRL, then A, then release CTRL - A repeats.
 		
 		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN := 0x104
 		static last_sc := 0

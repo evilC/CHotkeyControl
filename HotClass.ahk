@@ -14,6 +14,7 @@ class MyClass {
 	__New(){
 		this.HotClass := new HotClass()
 		this.HotClass.AddHotkey("hk1")
+		this.HotClass.AddHotkey("hk2")
 		Gui, Show, x0 y0
 	}
 }
@@ -128,7 +129,37 @@ class HotClass{
 
 	; All Input Events flow through here - ie an input device changes state
 	; Encompasses keyboard keys, mouse buttons / wheel and joystick buttons or hat directions
+	
+	/*
+	ToDo: 
+	Bug: Superfluous keys cause repeat of hotkey trigger
+	Repro:
+	Binding of A. Hold A (A Triggers), Hit B (A Triggers).
+	A should not trigger again, it is already in the down state.
+	
+	Bug: Hotkey triggers when longer hotkey triggers
+	Repro:
+	Bindings of A and A+B. Hold B, then hit A. A triggers as well as A+B
+	A should not trigger as it is "shorter" than A+B
+	*/
 	_ProcessInput(keyevent){
+		static state := {0: "U", 1: "D"}
+		; Update list of held keys, filter repeat events
+		if (keyevent.event){
+			; down event
+			if (this._CompareHotkeys([keyevent], this._HeldKeys)){
+				; repeat down event
+				return 0
+			}
+			this._HeldKeys.push(keyevent)
+		} else if (this._State != this.STATES.BIND) {
+			; up event, but not in bind state
+			pos := this._CompareHotkeys([keyevent], this._HeldKeys)
+			if (pos){
+				this._HeldKeys.Remove(pos)
+			}
+		}
+		OutputDebug % "EVENT: " this._RenderHotkey(keyevent) " " state[keyevent.event]
 		if (this._State == this.STATES.BIND){
 			; Bind mode - block all input and build up a list of held keys
 			if (keyevent.event = 1){
@@ -138,7 +169,7 @@ class HotClass{
 					SetTimer, % fn, -1000
 				}
 				; Down event - add pressed key to list of held keys
-				this._HeldKeys.push(keyevent)
+				;this._HeldKeys.push(keyevent)
 			} else {
 				; Up event in bind mode - state change from bind mode to normal mode
 				if (keyevent.Type = "k" && keyevent.Code == 1){
@@ -159,13 +190,14 @@ class HotClass{
 			return 1 ; block input
 		} else if (this._State == this.STATES.ACTIVE){
 			; ACTIVE state - aka "Normal Operation". Trigger hotkey callbacks as appropriate
+			tt := ""
 			if (keyevent.event = 1){
 				; As each key goes down, add it to the list of held keys
 			
 				; Check the bound hotkeys (longest to shortest) to check if there is a match
 			
 				; down event
-				this._HeldKeys.push(keyevent)
+				;this._HeldKeys.push(keyevent)
 				;OutputDebug % "Adding to list of held keys: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
 
 				; Check list of bound hotkeys for matches.
@@ -175,23 +207,22 @@ class HotClass{
 					match := this._CompareHotkeys(this._HotkeyCache[hk].Value, this._HeldKeys)
 					if (match){
 						name := this._HotkeyCache[hk].name
-						if (this._ActiveHotkeys[name] == 1){
-							return 0
-						}
-						SoundBeep, 1000, 150
+						;SoundBeep, 1000, 150
+						tt .= "`n" name " DOWN"
 						;OutputDebug % "TRIGGER DOWN: " name
-						this._ActiveHotkeys[name] := 1
+						;this._ActiveHotkeys[name] := 1
+						this._ActiveHotkeys[name] := this._HotkeyCache[hk].Value
 					}
 				}
 				; List must be indexed LONGEST (most keys in combination) to SHORTEST (least keys in combination) to ensure correct behavior
 				; ie if CTRL+A and A are both bound, pressing CTRL+A should match CTRL+A before A.
 			} else {
 				;OutputDebug % "Release: comparing " keyevent.joyid keyevent.type keyevent.Code " against " this._HeldKeys.length() " held keys."
-				pos := this._CompareHotkeys([keyevent], this._HeldKeys)
-				if (pos){
-					this._HeldKeys.Remove(pos)
-					;OutputDebug % "Removing item " pos " from list: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
-				}
+				;pos := this._CompareHotkeys([keyevent], this._HeldKeys)
+				;if (pos){
+				;	this._HeldKeys.Remove(pos)
+				;	;OutputDebug % "Removing item " pos " from list: " keyevent.joyid keyevent.type keyevent.Code ". Now " this._HeldKeys.length() " held keys"
+				;}
 				;OutputDebug % "Checking " this._ActiveHotkeys.length() " active hotkeys..."
 				for name, hotkey in this._ActiveHotkeys {
 					match := 0
@@ -202,12 +233,15 @@ class HotClass{
 					if (match){
 						;OutputDebug % "TRIGGER UP: " name
 						this._ActiveHotkeys.Remove(name)
-						SoundBeep, 500, 150
+						;SoundBeep, 500, 150
+						tt .= "`n" name " UP"
 					}
 				}
 			}
 			;out .=  " Now " this._HeldKeys.length() " keys"
 		}
+		OutputDebug % "HELD: " this._RenderHotkeys(this._HeldKeys) " - ACTIVE: " this._RenderNamedHotkeys(this._ActiveHotkeys)
+		ToolTip % tt
 		; Default to not blocking input
 		return 0 ; don't block input
 	}
@@ -264,7 +298,7 @@ class HotClass{
 			this.BindList := {}
 			this.Value := {}		; Holds the current binding
 			
-			Gui, Add, Edit, hwndhwnd w200 Disabled
+			Gui, Add, Edit, hwndhwnd w200 xm Disabled
 			this.hEdit := hwnd
 			Gui, Add, Button, hwndhwnd xp+210, Bind
 			this.hBind := hwnd
@@ -309,6 +343,38 @@ class HotClass{
 			}
 			return out
 		}
+	}
+	
+	; Debugging Renderer
+	_RenderHotkey(hk){
+		return hk.joyid hk.type hk.Code
+	}
+	
+	; Debugging Renderer
+	_RenderHotkeys(hk){
+		out := ""
+		Loop % hk.length(){
+			if (A_Index > 1){
+				out .= ","
+			}
+			out .= this._RenderHotkey(hk[A_Index])
+		}
+		return out
+	}
+	
+	; Debugging Renderer
+	_RenderNamedHotkeys(hk){
+		out := ""
+		for name, obj in hk {
+			ct := 1
+			out .= name ": "
+			if (ct > 1){
+				out .= " | "
+			}
+			out .= this._RenderHotkeys(obj)
+			ct++
+		}
+		return out
 	}
 }
 
@@ -434,14 +500,7 @@ class CInputDetector {
 	_ProcessKHook(wParam, lParam){
 		; KBDLLHOOKSTRUCT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644967%28v=vs.85%29.aspx
 		; KeyboardProc function: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644984(v=vs.85).aspx
-		
-		; ToDo:
-		; Use Repeat count, transition state bits from lParam to filter keys
-		
 		static WM_KEYDOWN := 0x100, WM_KEYUP := 0x101, WM_SYSKEYDOWN := 0x104
-		static last_sc := 0
-		static last_event := 0
-		
 		Critical
 		
 		if (this<0){
@@ -456,10 +515,8 @@ class CInputDetector {
         ;key:=GetKeyName(Format("vk{1:x}sc{2:x}", vk,sc))
 		event := wParam = WM_SYSKEYDOWN || wParam = WM_KEYDOWN
 		
-        if ( ! (sc = 541 || (last_event = event && last_sc = sc) ) ){		; ignore non L/R Control. This key never happens except eg with RALT
+        if ( sc != 541 ){		; ignore non L/R Control. This key never happens except eg with RALT
 			block := this._Callback.({ Type: "k", Code: sc, event: event})
-			last_sc := sc
-			last_event := event
 			if (block){
 				return 1
 			}
@@ -470,20 +527,12 @@ class CInputDetector {
 	
 	; Process Mouse Hook messages
 	_ProcessMHook(wParam, lParam){
-		/*
-		typedef struct tagMSLLHOOKSTRUCT {
-		  POINT     pt;
-		  DWORD     mouseData;
-		  DWORD     flags;
-		  DWORD     time;
-		  ULONG_PTR dwExtraInfo;
-		}
-		*/
 		; MSLLHOOKSTRUCT structure: https://msdn.microsoft.com/en-us/library/windows/desktop/ms644970(v=vs.85).aspx
 		static WM_LBUTTONDOWN := 0x0201, WM_LBUTTONUP := 0x0202 , WM_RBUTTONDOWN := 0x0204, WM_RBUTTONUP := 0x0205, WM_MBUTTONDOWN := 0x0207, WM_MBUTTONUP := 0x0208, WM_MOUSEHWHEEL := 0x20E, WM_MOUSEWHEEL := 0x020A, WM_XBUTTONDOWN := 0x020B, WM_XBUTTONUP := 0x020C
 		static button_map := {0x0201: 1, 0x0202: 1 , 0x0204: 2, 0x0205: 2, 0x0207: 3, 0x208: 3}
 		static button_event := {0x0201: 1, 0x0202: 0 , 0x0204: 1, 0x0205: 0, 0x0207: 1, 0x208: 0}
 		Critical
+		
 		if (this<0 || wParam = 0x200){
 			Return DllCall("CallNextHookEx", "Uint", Object(A_EventInfo)._hHookMouse, "int", this, "Uint", wParam, "Uint", lParam)
 		}
@@ -531,7 +580,6 @@ class CInputDetector {
 			}
 		}
 
-		;OutputDebug % "Mouse: " keyname ", event: " event
 		block := this._Callback.({Type: "m", Code: button, event: event})
 		if (wParam = WM_MOUSEHWHEEL || wParam = WM_MOUSEWHEEL){
 			; Mouse wheel does not generate up event, simulate it.
